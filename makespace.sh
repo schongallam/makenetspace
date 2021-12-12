@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# makespace v1.0a
 # Copyright 2021 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
