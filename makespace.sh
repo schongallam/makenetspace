@@ -56,8 +56,13 @@ show_help() {
 
     echo "usage:"
     echo "$ makespace NETNS DEVICE [ESSID] [PASSWORD]"
+    echo    
+    echo "Options:"
+    echo " -f                   option to force execution without"
+    echo "                      a proper resolv.conf in place."
+    echo "                      otherwise, script will exit."
     echo
-    echo "Argments:"
+    echo "Arguments:"
     echo " NETNS                The name of the namespace you wish"
     echo "                      to create"
     echo
@@ -84,7 +89,7 @@ show_help() {
     echo "resolv.conf file that already exists in the folder"
     echo "/etc/netns/$NETNS, the purpose is to have this file bind"
     echo "to /etc/resolv.conf within the new namespace.  Without"
-    echo "this you will have to manually set up DNS."
+    echo "this you'll have to manually set up DNS (see -f option)."
     echo
 
 }
