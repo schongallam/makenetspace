@@ -55,7 +55,7 @@ BAD_NAMESPACE=3         # namespace is bad or already exists
 show_help() {
 
     echo "usage:"
-    echo "$ makespace NETNS DEVICE [ESSID] [PASSWORD]"
+    echo "$ makespace [-f] NETNS DEVICE [ESSID] [PASSWORD]"
     echo    
     echo "Options:"
     echo " -f                   option to force execution without"
