@@ -1,5 +1,5 @@
 Please email me if you have any suggestions, fixes, or interest in contributing or collaborating on expanding this script.
 
-All potential collaborators, please understand that the principles of https://www.contributor-covenant.org/version/2/1/code_of_conduct/ will generally apply.
+All constructive feedback is eagerly appreciated!
 
-That is all.  Thank you.
+All potential collaborators are asked to abide by the principles of https://www.contributor-covenant.org/version/2/1/code_of_conduct/
