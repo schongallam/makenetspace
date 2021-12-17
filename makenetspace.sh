@@ -1,14 +1,14 @@
 #!/bin/sh
 #
-# makespace v 0.1.0-alpha (Initial Release)
+# makenetspace v 0.1.0-alpha (Initial Release)
 # Copyright 2021 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
 #
-# A script to set up a network namespace and move an adapter into it
+# A script to set up a network namespace and move an adapter into it, and clean up after
 # 
 # usage:
-# $ makespace [-f] NETNS DEVICE [ESSID] [PASSWORD]
+# $ makenetspace [-f] NETNS DEVICE [ESSID] [PASSWORD]
 #
 # -f                    option to force execution without a proper resolv.conf in place.
 #                       otherwise, script will exit.
@@ -17,7 +17,7 @@
 # ESSID and PASSWORD    used for wireless interfaces. Attempts to join network
 #                       with wpa_supplicant only.
 #
-# makespace will create the namespace NETNS, move the physical interface DEVICE to that space,
+# makenetspace will create the namespace NETNS, move the physical interface DEVICE to that space,
 # attempt to join the wireless network ESSID using password PASSWORD, then finally launch
 # a root shell in that namespace.
 #
@@ -55,7 +55,7 @@ BAD_NAMESPACE=3         # namespace is bad or already exists
 show_help() {
 
     echo "usage:"
-    echo "$ makespace [-f] NETNS DEVICE [ESSID] [PASSWORD]"
+    echo "$ makenetspace [-f] NETNS DEVICE [ESSID] [PASSWORD]"
     echo    
     echo "Options:"
     echo " -f                   option to force execution without"
@@ -73,7 +73,7 @@ show_help() {
     echo "                      Attempts to join network with"
     echo "                      wpa_supplicant only."
     echo
-    echo "makespace will create the namespace NETNS, move the"
+    echo "makenetspace will create the namespace NETNS, move the"
     echo "physical interface DEVICE to that space, attempt to join"
     echo "the wireless network ESSID using password PASSWORD, then"
     echo "finally launch a root shell in that namespace."
