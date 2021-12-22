@@ -8,21 +8,52 @@
 # A script to set up a network namespace and move an adapter into it, and clean up after
 # 
 # usage:
-# $ makenetspace [-f] NETNS DEVICE [ESSID] [PASSWORD]
+# $ makenetspace [OPTIONS] NETNS DEVICE [ESSID] [PASSWORD]
 #
-# -f                    option to force execution without a proper resolv.conf in place.
-#                       otherwise, script will exit.
-# NETNS                 the name of the namespace you wish to create
-# DEVICE                the network interface that you want to assign to the namespace NETNS
-# ESSID and PASSWORD    used for wireless interfaces. Attempts to join network
-#                       with wpa_supplicant only.
+# OPTIONS:
+# --force, -f           Option to force execution without a proper resolv.conf in place.
+#                       otherwise, script will exit.  Ignored if using --cleanup option.
+# --wireless -w         Assume DEVICE is a wireless interface, forcing the script to check
+#                       for a different physical device name
+#
+# --noshell, -n         Exit the script instead of spawning a root shell in the new namespace.
+#                       use with --cleanup later to close the namespace.  incompatible
+#                       with --cleanup
+#
+# --cleanup, -c         Resumes execution as if the su shell was just exited.  This option
+#                       only attempts to remove the specified DEVICE, so if you manually
+#                       added other devices, be sure to manually remove them before using
+#                       this option.  Otherwise, you will have to search for and kill the
+#                       relevant processes to reclaim the extra devices.  This option can
+#                       also be employed as a rescue attempt. Incompatible with --noshell
+#
+# --strict, -s          Strict verification that DEVICE was successfully moved into NETNS.
+#                       upon failure, cleans up the namespace before exiting.  Ignored if
+#                       using --cleanup option.
+#
+# --strictkill -k       Like --strict, but exits immediately (no cleanup).  Takes precedence
+#                       over regular --strict.  Ignored if using --cleanup option.
+#
+# --nmignore, -i        Don't reset network-manager on cleanup
+#
+# --static <CIDR> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
+#                       static ip address and default route.  IPv4 only at this time.
+#                       CIDR        standard format a.b.c.d/XX
+#                       GATEWAY     a.b.c.d
+#
+# MANDATORY PARAMETERS
+#  NETNS                The name of the namespace you wish to create.
+#  DEVICE               The network interface that you want to assign to the namespace NETNS.
+#  ESSID and PASSWORD   Used for wireless interfaces. Attempts to join network, attempts
+#                       with wpa_supplicant only.  Not required if using --cleanup
 #
 # makenetspace will create the namespace NETNS, move the physical interface DEVICE to that space,
-# attempt to join the wireless network ESSID using password PASSWORD, then finally launch
-# a root shell in that namespace.
+# attempt to join the wireless network ESSID using password PASSWORD, then finally (by default)
+# launch a root shell in that namespace.  Use the options listed to modify this process.
 #
-# when you exit the shell, the script will attempt to kill dhclient and wpa_supplicant
+# When you exit the shell, the script will by default attempt to kill dhclient and wpa_supplicant
 # within that namespace, revert the device to the default namespace, and remove the namespace.
+# Finally, it will reset network-manager unless otherwise instructed not to.
 #
 # Note: this script must be run as the superuser.
 #
@@ -31,10 +62,16 @@
 # /etc/resolv.conf within the new namespace.  Without this you will have to manually set up
 # DNS  (see -f option).
 #
+# Examples:
+#
+# # makenetspace MyEthernet eth0
+# # makenetspace MyWifi wlp7s0 MyNetwork MyPassword
+# # makenetspace --static 192.168.0.10/24 192.168.0.1 MyStaticHost eth0
+# # makenetspace --cleanup MyWifi wlp7s0
 #
 # Other internal variables:
 #  NO_CHECK             1 if skipping check for /etc/netns/$NETNS/resolv.conf
-#                       otherwise, 0
+#                       otherwise, 0; determined by --force
 #  INTERFACE_TYPE       1 for wired DEVICE, 2 for wireless DEVICE
 #  EXIT_CODE            captures and preserves an abnormal exit code from a command in the
 #                       event that we need to exit the script with it
@@ -43,6 +80,8 @@
 #                       Otherwise, undefined
 #  UNCONFIRMED_MOVE     (UNUSED) 1 if grep can't find DEVICE listed in the new namespace after
 #                       attempting to move it
+#  SPAWN_SHELL          defaults to true.  False with --noshell, -n option
+#  CLEANUP_ONLY         defaults to false. Incompatible with --noshell, -n
 #
 # OTHER EXIT CODES:
 NORMAL=0                # normal exit
@@ -50,6 +89,9 @@ HELP=0                  # help/description shown
 NO_ROOT=1               # not run as root
 NO_RESOLV_CONF=2        # unable to find appropriate resolv.conf file
 BAD_NAMESPACE=3         # namespace is bad or already exists
+CONFLICTING_OPTIONS=4   # specifically, conflict between --noshell and --cleanup (SPAWN_SHELL and CLEANUP_ONLY)
+STRICT_WITH_CLEANUP=5   # could not verify that DEVICE was moved into NETNS.  NETNS removed.
+STRICT_KILL=6           # could not verify that DEVICE was moved into NETNS.  Exited immediately.
 
 # HELP TEXT:
 show_help() {
@@ -98,13 +140,21 @@ show_help() {
 # SCRIPT ENTRY POINT
 #
 
+# set initial defaults
+# TODO: Not all global variables have been included here yet.
+SPAWN_SHELL=1
+CLEANUP_ONLY=0
+NO_CHECK=0
+
+# TODO: implement getopts
+
 if [ "$1" = "-f" ]; then
     NO_CHECK=1
     shift
-else
-    NO_CHECK=0
 fi
 
+# behavior: assumes a password is supplied.  If the ESSID is an open network, you still need to specify a password which will be ignored.
+# TODO: fix this assumption somehow
 if [ $# -eq 2 ]; then
     echo "Assuming WIRED interface..."
     INTERFACE_TYPE=1 # 1 for wired, we'll need this later
@@ -185,7 +235,7 @@ else
 fi
 
 # Check for success
-ip netns exec $NETNS ip link show | grep $DEVICE > /dev/null # may yield false positive result for success if DEVICE is abnormally too simple of a string
+ip netns exec $NETNS ip link show | grep $DEVICE > /dev/null # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
 if [ $? -ne 0 ]; then
     echo "Unable to confirm $DEVICE in $NETNS, will attempt to continue..."
     UNCONFIRMED_MOVE=1
@@ -202,7 +252,7 @@ if [ $? -ne 0 ]; then
     echo "Could not bring up $DEVICE in $NETNS, something probably went wrong. Proceeding..."
 fi
 
-# Connect to wifi, if required
+# Connect to wifi, if required.
 if [ $INTERFACE_TYPE -eq 2 ]; then
     echo "Attempting to connect to wifi network $ESSID... (may see initialization failures, that's usually OK)"
     wpa_passphrase $ESSID $PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
@@ -215,12 +265,15 @@ if [ $INTERFACE_TYPE -eq 2 ]; then
     ip netns exec "$NETNS" iwconfig
 fi
 
+# TODO: distinguish between intent to use dhclient vs. static config
+# TODO: enable timeout limits or other failover parameters for dhclient call
 echo
 echo "Starting dhclient..."
 ip netns exec "$NETNS" dhclient "$DEVICE"
 echo "(DEBUG) dhclient returns status $?..."
 
 # Spawn a shell in the new namespace
+# TODO: implement shell discretionary option
 
 echo "Spawning root shell in $NETNS..."
 echo "... try runuser -u UserName BrowserName &"
@@ -245,6 +298,7 @@ ip netns del "$NETNS"
 echo "Deleted $NETNS"
 
 # ... and just for good measure
+# TODO: check parameter to ignore nm and conditionally execute
 echo "Restarting Network Manager"
 service network-manager restart
 
