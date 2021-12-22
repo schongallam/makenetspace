@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# makenetspace v 0.1.0-alpha (Initial Release)
+# makenetspace v 0.1.1-alpha (implementing getopts for expanded functionality)
 # Copyright 2021 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
