@@ -1,4 +1,5 @@
 # makenetspace
+TODO: NEEDS UPDATING FROM 0.1.0
 makenetspace is a simple linux script which creates a network namespace, moves a specified interface into it, and spawns a shell in that namespace.  Changes are reverted upon exiting.  It does basic error checking along the way, and will attempt to ignore certain minor errors.
 
 When this might be useful: If you have multiple network interfaces on your device, and want a quick and convenient way to set up an environment where you can control which traffic goes through which interface, this script might be for you.  Suppose, for example, that you have two internet connections.  You may want to use browser A for connection 1, and browser B for connection 2.  This script will make it easy for you to do that.
