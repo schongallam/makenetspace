@@ -8,24 +8,30 @@
 # A script to set up a network namespace and move an adapter into it, and clean up after
 # 
 # usage:
-# $ makenetspace [OPTIONS] NETNS DEVICE [ESSID] [PASSWORD]
+# $ makenetspace [OPTIONS] NETNS DEVICE
 #
 # OPTIONS:
+# --essid, -e <ESSID>   Attempt to join wireless network ESSID after creating namespace.
+#                       Ignored if using --cleanup.
+#
+# --passwd, -p <PASSWORD>   Password to use with ESSID.  Ignored if --essid not used.
+#
 # --force, -f           Option to force execution without a proper resolv.conf in place.
 #                       otherwise, script will exit.  Ignored if using --cleanup option.
+#
 # --wireless -w         Assume DEVICE is a wireless interface, forcing the script to check
-#                       for a different physical device name
+#                       for a different physical device name.
 #
 # --noshell, -n         Exit the script instead of spawning a root shell in the new namespace.
-#                       use with --cleanup later to close the namespace.  incompatible
-#                       with --cleanup
+#                       use with --cleanup later to close the namespace.  Incompatible
+#                       with --cleanup.
 #
 # --cleanup, -c         Resumes execution as if the su shell was just exited.  This option
 #                       only attempts to remove the specified DEVICE, so if you manually
 #                       added other devices, be sure to manually remove them before using
 #                       this option.  Otherwise, you will have to search for and kill the
 #                       relevant processes to reclaim the extra devices.  This option can
-#                       also be employed as a rescue attempt. Incompatible with --noshell
+#                       also be employed as a rescue attempt. Incompatible with --noshell.
 #
 # --strict, -s          Strict verification that DEVICE was successfully moved into NETNS.
 #                       upon failure, cleans up the namespace before exiting.  Ignored if
@@ -34,7 +40,7 @@
 # --strictkill -k       Like --strict, but exits immediately (no cleanup).  Takes precedence
 #                       over regular --strict.  Ignored if using --cleanup option.
 #
-# --nmignore, -i        Don't reset network-manager on cleanup
+# --nmignore, -i        Don't reset network-manager on cleanup.
 #
 # --static <CIDR> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
 #                       static ip address and default route.  IPv4 only at this time.

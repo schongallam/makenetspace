@@ -1,6 +1,7 @@
-implement getotps for command line arguments
+implement advanced parsing for command line arguments
 add an option to exit the script at the point it would normally spawn the shell
 add an option to clean up an existing netns
 add DEVICE verification
 add option to determine if network-manager service will be reset before exiting
+add an option to control DHCP client usage vs. ip command static setup vs. something else
 assess input verification needs
