@@ -1,3 +1,4 @@
+"""
 Usage:
 # makenetspace [OPTIONS] NETNS DEVICE
 
@@ -37,12 +38,17 @@ OPTIONS:
 
 --nmignore, -i      Don't reset network-manager on cleanup.
 
-[ below still needs implementation ]
+[ below still needs rigorous implementation testing ]
 
---static <CIDR> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
+--static <STATIC_IP> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
                     static ip address and default route.  IPv4 only at this time.
+                    Incompatible with --noconfig option.
                     CIDR        standard format a.b.c.d/XX
                     GATEWAY     a.b.c.d
+
+--noconfig, -o      Don't start dhclient and don't try to configure the IP manually.  Using
+                    this option will still attempt to connect to the network, but it won't
+                    be immediately usable in this state.  Incompatible with --static option.
 
 --quiet, -q         Suppress unnecessary output (ignored if --debug flag used)
 --debug, -d         Enable debug output (overrides --quiet)
@@ -72,3 +78,4 @@ Examples:
 # makenetspace MyWifi wlp7s0 MyNetwork MyPassword
 # makenetspace --static 192.168.0.10/24 192.168.0.1 MyStaticHost eth0
 # makenetspace --cleanup MyWifi wlp7s0
+"""

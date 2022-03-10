@@ -68,8 +68,9 @@ STRICTKILL=0
 #                       set to true (1) by --nmignore, -i
 NMIGNORE=0
 
-# MANUAL_IP_CONFIG      set to false (0).  Set to true by --static option, which collects CIDR and
-#                       GATEWAY
+# MANUAL_IP_CONFIG      defaults to 0.  Set to 1 by --static option, which collects STATIC_IP and
+#                       GATEWAY.  Set to 2 by --noconfig, -o option, to indicate skipping host
+#                       IP configuration entirely.
 MANUAL_IP_CONFIG=0
 
 #
@@ -81,17 +82,19 @@ MANUAL_IP_CONFIG=0
 #                       Otherwise, undefined
 #  UNCONFIRMED_MOVE     (UNUSED) 1 if grep can't find DEVICE listed in the new namespace after
 #                       attempting to move it
+#  LO_FAIL              (UNUSED) 1 if unable to raise lo interface in NETNS
+#  DEVICE_FAIL          (UNUSED) 1 if unable to raise DEVICE in NETNS
 
 # OTHER EXIT CODES:
 NORMAL=0                # normal exit
 HELP=0                  # help/description shown
-BAD_ARGUMENT=1          # Unable to parse arguments
+BAD_ARGUMENT=1          # Problem parsing arguments
 NO_ROOT=2               # not run as root
 NO_RESOLV_CONF=3        # unable to find appropriate resolv.conf file
 BAD_NAMESPACE=4         # namespace is bad or already exists
-#CONFLICTING_OPTIONS=5   # specifically, conflict between --noshell and --cleanup (SPAWN_SHELL and CLEANUP_ONLY)
-STRICT_WITH_CLEANUP=6   # could not verify that DEVICE was moved into NETNS.  NETNS removed.
-EXIT_STRICT_KILL=7      # could not verify that DEVICE was moved into NETNS.  Exited immediately.
+STRICT_WITH_CLEANUP=5   # could not verify that DEVICE was moved into NETNS.  NETNS removed.
+EXIT_STRICT_KILL=6      # could not verify that DEVICE was moved into NETNS.  Exited immediately.
+DEBUG_EXIT=10           # used for debugging purposes
 
 # HELP TEXT:
 usage() {
@@ -174,16 +177,20 @@ get_arguments() {
             ;;
             --static)
                 if [ $# -lt 3 ]; then
-                    echo "Arguments missing for --static <CIDR> <GATEWAY>"
+                    echo "Arguments missing for --static <STATIC_IP> <GATEWAY>"
                     exit $BAD_ARGUMENT
                 fi
-                MANUAL_IP_CONFIG=1
-                CIDR=$2
+                MANUAL_IP_CONFIG=$((MANUAL_IP_CONFIG+1))
+                STATIC_IP=$2
                 GATEWAY=$3
                 shift
                 shift
                 shift
-                ;;                            
+                ;;               
+            --noconfig|-o)
+                MANUAL_IP_CONFIG=$((MANUAL_IP_CONFIG+2))
+                shift
+                ;;            
             --force|-f)
                 FORCE=1
                 shift
@@ -235,6 +242,11 @@ get_arguments() {
 
     if [ $STRICT -eq 1 -a $STRICTKILL -eq 1 ]; then
         echo "--strict and --strictkill are incompatible.  Exiting."
+        exit $BAD_ARGUMENT
+    fi
+
+    if [ $MANUAL_IP_CONFIG -gt 2 ]; then
+        echo "--static and --noconfig are incompatible.  Exiting."
         exit $BAD_ARGUMENT
     fi
 
@@ -323,7 +335,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         exit $BAD_NAMESPACE
     fi
 
-    # not technically required
+    # not technically required... or is it?
     ip link set dev "$DEVICE" down
 
     # Wired or wireless?  If wireless, we need to reference the physical device
@@ -363,8 +375,8 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             STRICT=2 # failure
         else
             echo "Unable to confirm $DEVICE in $NETNS, will attempt to continue..."
-            UNCONFIRMED_MOVE=1
         fi
+        UNCONFIRMED_MOVE=1
     fi
 
     # Skip the next steps if STRICT option enforced
@@ -384,6 +396,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 echo "Could not bring up lo in $NETNS, something else may be wrong. Proceeding..."
             fi
         fi
+        LO_FAIL=1
     fi
 
     if [ $STRICT -ne 2 ]; then
@@ -400,29 +413,44 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 echo "Could not bring up $DEVICE in $NETNS, something probably went wrong. Proceeding..."
             fi
         fi
+        DEVICE_FAIL=1
     fi
 
 
     # Connect to wifi, if required.
-    # TODO: setup joining WIFI without WPA passphrase
+    # TODO: testing of the no-password method, using iwconfig
 
     if [ $STRICT -ne 2 ]; then
-        if [ $INTERFACE_TYPE -eq 2 ]; then
-            echo "Attempting to connect to wifi network $ESSID... (may see initialization failures, that's usually OK)"
-            wpa_passphrase $ESSID $PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
+    
+        #dirty hack to ensure the exit status variable ($?) is reset to zero
+        #someone please educate me if there is a better way to do this
+        cat /dev/null
+        if [ $? -ne 0 ]; then
+            echo "Should never encounter this, exiting."
+            exit $DEBUG_EXIT
+        fi
 
-            if [ $? -ne 0 ]; then
-                if [ $STRICTKILL -eq 1 ]; then
-                    echo "Error $? attempting to join $ESSID, enforcing --strictkill, exiting."
-                    exit $EXIT_STRICT_KILL
-                fi            
-                if [ $STRICT -eq 1 ]; then
-                    echo "Error $? attempting to join $ESSID.  Enforcing --strict option, proceeding to cleanup..."
-                    STRICT=2
-                else
-                    echo "Unconfirmed attempt to join $ESSID with error $?. Proceeding..."
-                fi
+        # connect to open network with iwconfig, or, with WPA supplicant if password is provided
+        if [ $INTERFACE_TYPE -eq 1 ]; then
+            echo "Attempting to connect to open wifi network $ESSID..."
+            ip netns exec "$NETNS" iwconfig "$DEVICE" essid "$ESSID"
+        elif [ $INTERFACE_TYPE -eq 3 ]; then
+            echo "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
+            wpa_passphrase $ESSID $PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
+        fi
+
+        if [ $? -ne 0 ]; then
+            if [ $STRICTKILL -eq 1 ]; then
+                echo "Error $? attempting to join $ESSID, enforcing --strictkill, exiting."
+                exit $EXIT_STRICT_KILL
+            fi            
+            if [ $STRICT -eq 1 ]; then
+                echo "Error $? attempting to join $ESSID.  Enforcing --strict option, proceeding to cleanup..."
+                STRICT=2
+            else
+                echo "Unconfirmed attempt to join $ESSID with error $?. Proceeding..."
             fi
+        fi
 
             echo "(DEBUG) displaying output of iwconfig in namespace $NETNS:"
             ip netns exec "$NETNS" iwconfig
@@ -433,10 +461,23 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     # TODO: enable timeout limits or other failover parameters for dhclient call
 
     if [ $STRICT -ne 2 ]; then
+
+        # intentional blank line
         echo
-        echo "Starting dhclient..."
-        ip netns exec "$NETNS" dhclient "$DEVICE"
-        echo "(DEBUG) dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
+
+        # start dhclient, or, assign given STATIC_IP and GATEWAY, or, do nothing
+        if [ $MANUAL_IP_CONFIG -eq 0 ]; then
+            echo "Starting dhclient..."
+            ip netns exec "$NETNS" dhclient "$DEVICE"
+            echo "(DEBUG) dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
+        elif [ $MANUAL_IP_CONFIG -eq 1]; then
+            echo "Attempting to manually configure STATIC_IP and GATEWAY.  Exit status verification not implemented yet."
+            ip netns exec "$NETNS" ip addr add "$STATIC_IP" dev "$DEVICE" #https://www.tecmint.com/ip-command-examples/
+            #ip netns exec "$NETNS" ip address add dev "$DEVICE" local "$STATIC_IP" #https://linux.die.net/man/8/ip
+            ip netns exec "$NETNS" ip route add default via "$GATEWAY"
+        else
+            echo "No IP host configuration set up.  Do not expect usual IP access until you address this."
+        fi
 
         if [ $SPAWN_SHELL -eq 0 ]; then # we are done
             exit $NORMAL
@@ -447,8 +488,8 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         echo "... try runuser -u UserName BrowserName &"
         echo "... and exit to kill the shell and netns, when done"
         ip netns exec "$NETNS" su
-    fi
 
+    fi
     # end of setup and shell. Only cleanup remains.
 
 else # --cleanup option enabled.  Still may need to set $PHY
@@ -467,6 +508,8 @@ fi
 
 # Stop dhclient
 # TODO: figure out how this is affected, if using --static option
+# In the meantime, just stop dhclient regardless and ignore any manually set IP config
+# which should go away when we kill the namespace anyway... right?
 ip netns exec "$NETNS" dhclient -r
 echo "Stopped dhclient in $NETNS with status $?"
 
@@ -484,8 +527,6 @@ ip netns del "$NETNS"
 echo "Deleted $NETNS"
 
 # ... and just for good measure
-# TODO: check parameter to ignore nm and conditionally execute
-
 if [ $NMIGNORE -eq 0 ]; then
     echo "Restarting Network Manager"
     service network-manager restart
