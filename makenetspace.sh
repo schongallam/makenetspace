@@ -457,7 +457,6 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         fi
     fi
 
-    # TODO: distinguish between intent to use dhclient vs. static config
     # TODO: enable timeout limits or other failover parameters for dhclient call
 
     if [ $STRICT -ne 2 ]; then
