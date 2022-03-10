@@ -9,6 +9,7 @@ OPTIONS:
                     Ignored if using --cleanup.
 
 --passwd, -p <PASSWORD>   Password to use with ESSID.  Ignored if --essid not used.
+
 --force, -f         Option to force execution without a proper resolv.conf in place.
                     otherwise, script will exit.  Ignored if using --cleanup option.
 
@@ -35,6 +36,8 @@ OPTIONS:
                     over regular --strict.  Ignored if using --cleanup option.
 
 --nmignore, -i      Don't reset network-manager on cleanup.
+
+[ below still needs implementation ]
 
 --static <CIDR> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
                     static ip address and default route.  IPv4 only at this time.
