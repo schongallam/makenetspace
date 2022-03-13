@@ -415,6 +415,7 @@ get_arguments() {
     fi
 
     # everything checks good so far, so collect the wifi password from STDIN if indicated
+    # read -s is not POSIX compliant, this employs an alternate technique
     if [ $GET_PWD -eq 1 -a $SET_WIFI -eq 1 ]; then
         if [ $DEBUG_LEVEL -gt $MSG_NORM ]; then
             echo -n "Enter WIFI password: "
