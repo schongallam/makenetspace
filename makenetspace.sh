@@ -29,6 +29,16 @@
 # - At this point, exit, if no shell is desired
 # - (--cleanup option redirects to here)
 # - 
+
+### INTERNAL VARIABLES ###
+
+# Debug levels for stdout messages
+MSG_FATAL=0             # Something programatically went wrong. Will always print.
+MSG_NORM=1              # 'Normal' information that would be good to display in most cases.
+MSG_VERBOSE=2           # Something deviated from the expected, but script will attempt to proceed.
+MSG_DEBUG=5             # 'Debug'-level info, for instance printing a variable, or following the
+                        # programmatic flow of the script.
+
 #
 # Option-determined variables:
 #  ESSID                ESSID of wireless network
@@ -40,6 +50,9 @@ FORCE=0
 #  INTERFACE_TYPE       defaults to 0-> wired; 1->wifi, no PW; 2->PW without wifi (invalid); 3->wifi+PW
 #                       determined by presence of --essid and -passwd options
 INTERFACE_TYPE=0
+SET_WIFI=0              # 1 if -essid is invoked.  Used only for explicit parameter auditing
+SET_PWD=0               # 1 if --passwd is invoked.  Used only for explicit parameter auditing,
+                        # this should never be 1 if SET_WIFI is 0
 
 #  SPAWN_SHELL          defaults to true (1).  False with --noshell, -n option
 SPAWN_SHELL=1
@@ -72,6 +85,16 @@ NMIGNORE=0
 #                       GATEWAY.  Set to 2 by --noconfig, -o option, to indicate skipping host
 #                       IP configuration entirely.
 MANUAL_IP_CONFIG=0
+SET_STATIC=0            # 1 if --static option is invoked
+SET_NOCONFIG=0          # 1 if --noconfig is invoked
+
+# DEBUG_LEVEL           Triggers or suppresses output based on debug relevancy
+DEBUG_LEVEL=$MSG_VERBOSE #TODO: set to MSG_NORMAL in production release
+SET_QUIET=0             # 1 if --quiet option is invoked
+SET_DEBUG=0             # 1 if --debug option is invoked
+SET_VERBOSE=0           # 1 if --verbose option is invoked
+
+
 
 #
 # Other internal variables:
@@ -85,6 +108,7 @@ MANUAL_IP_CONFIG=0
 #  LO_FAIL              (UNUSED) 1 if unable to raise lo interface in NETNS
 #  DEVICE_FAIL          (UNUSED) 1 if unable to raise DEVICE in NETNS
 
+
 # OTHER EXIT CODES:
 NORMAL=0                # normal exit
 HELP=0                  # help/description shown
@@ -95,6 +119,11 @@ BAD_NAMESPACE=4         # namespace is bad or already exists
 STRICT_WITH_CLEANUP=5   # could not verify that DEVICE was moved into NETNS.  NETNS removed.
 EXIT_STRICT_KILL=6      # could not verify that DEVICE was moved into NETNS.  Exited immediately.
 DEBUG_EXIT=10           # used for debugging purposes
+
+# Printing to stdout based on DEBUG_LEVEL
+d_echo() {
+    if [ $1 -le $DEBUG_LEVEL ]; then echo "$2"; fi
+}
 
 # HELP TEXT:
 usage() {
@@ -146,49 +175,53 @@ usage() {
 # Process options and positional arguments
 get_arguments() {
 
-    echo "get_arguments: zero is $0, one is $1"
-    echo "Get options first... count is $#"
+    d_echo $MSG_NORM "get_arguments: zero is $0, one is $1" #not MSG_DEBUG because that option hasnt been set yet
+    d_echo $MSG_NORM "Get options first... count is $#"
 
     INTERFACE_TYPE=0
 
     while [ $# -gt 0 ]; do
-        echo " testing $1..."
+        d_echo $MSG_DEBUG " testing $1..."
         case $1 in
             --essid|-e)
                 if [ $# -lt 2 ]; then
-                    echo "Argument missing after ESSID. Try $0 --help or $0 -h"
+                    d_echo $MSG_NORM "Argument missing after ESSID. Try $0 --help or $0 -h"
                     exit $BAD_ARGUMENT
                 fi
                 ESSID=$2
                 INTERFACE_TYPE=$((INTERFACE_TYPE+1))
                 VIRTUAL=1
+                SET_WIFI=1 # used only for explicit parameter auditing
                 shift
                 shift
             ;;
             --passwd|-p)
                 if [ $# -lt 2 ]; then
-                    echo "Argument missing after password."
+                    d_echo $MSG_NORM "Argument missing after password."
                     exit $BAD_ARGUMENT
                 fi
                 WIFI_PASSWORD=$2
                 INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
+                SET_PWD=1 # used only for explicit parameter auditing
                 shift
                 shift
             ;;
             --static)
                 if [ $# -lt 3 ]; then
-                    echo "Arguments missing for --static <STATIC_IP> <GATEWAY>"
+                    d_echo $MSG_NORM "Arguments missing for --static <STATIC_IP> <GATEWAY>"
                     exit $BAD_ARGUMENT
                 fi
                 MANUAL_IP_CONFIG=$((MANUAL_IP_CONFIG+1))
                 STATIC_IP=$2
                 GATEWAY=$3
+                SET_STATIC=1
                 shift
                 shift
                 shift
                 ;;               
             --noconfig|-o)
                 MANUAL_IP_CONFIG=$((MANUAL_IP_CONFIG+2))
+                SET_NOCONFIG=1
                 shift
                 ;;            
             --force|-f)
@@ -219,13 +252,25 @@ get_arguments() {
                 NMIGNORE=1
                 shift
                 ;;
+            --quiet|-q)
+                SET_QUIET=1
+                shift
+                ;;
+            --verbose|-v)
+                SET_VERBOSE=1
+                shift
+                ;;
+            --debug|-d)
+                SET_DEBUG=1
+                shift
+                ;;
             --help|-h)
                 usage
                 exit $HELP
                 ;;
             --*|-*)
-                echo "Unrecognized $1.  Sorry, flag stacking is not supported yet."
-                echo "try $0 --help or $0 -h"
+                d_echo $MSG_NORM "Unrecognized $1.  Sorry, flag stacking is not supported yet."
+                d_echo $MSG_NORM "try $0 --help or $0 -h"
                 exit $BAD_ARGUMENT
                 ;;
             *)
@@ -234,39 +279,59 @@ get_arguments() {
         esac
     done
 
-    #check for certain conflicting options
+    # Now check for certain conflicting options
+    #  in certain cases, implicit parameter auditing was implemented initially, but this could be subject to
+    #  abuse or undocumented behavior if someone uses the same argument multiple times.  To account for this,
+    #  explicit checking was implemented
+
+    # Currently using discrete options to set debug output level.
+    # May want to use an integer option in the future, but that would make the parameter less intuitive.
+    if [ $SET_QUIET -eq 1 ]; then # lowest priority option
+        DEBUG_LEVEL=$MSG_FATAL
+    fi
+
+    if [ $SET_VERBOSE -eq 1 ]; then # next priority
+        DEBUG_LEVEL=$MSG_VERBOSE
+    fi
+
+    if [ $SET_DEBUG -eq 1 ]; then # top priority
+        DEBUG_LEVEL=$MSG_DEBUG
+    fi
+
     if [ $SPAWN_SHELL -eq 0 -a $CLEANUP_ONLY -eq 1 ]; then
-        echo "--noshell and --cleanup options are incompatible.  Exiting."
+        d_echo $MSG_NORM "--noshell and --cleanup options are incompatible.  Exiting."
         exit $BAD_ARGUMENT
     fi
 
     if [ $STRICT -eq 1 -a $STRICTKILL -eq 1 ]; then
-        echo "--strict and --strictkill are incompatible.  Exiting."
+        d_echo $MSG_NORM "--strict and --strictkill are incompatible.  Exiting."
         exit $BAD_ARGUMENT
     fi
 
-    if [ $MANUAL_IP_CONFIG -gt 2 ]; then
-        echo "--static and --noconfig are incompatible.  Exiting."
+    if [ $MANUAL_IP_CONFIG -gt 2 ] || 
+       [ $SET_DEBUG -eq 1 -a $SET_NOCONFIG -eq 1 ]; then # Uses both implicit and explicit parameter deconfliction
+        d_echo $MSG_NORM "--static and --noconfig are incompatible.  Exiting."
         exit $BAD_ARGUMENT
     fi
 
-    if [ $INTERFACE_TYPE -eq 2 ]; then
-        echo "Password specified without ESSID, ignoring.  Assuming wired device."
+    if [ $INTERFACE_TYPE -eq 2 ] ||
+       [ $SET_WIFI -eq 0 -a $SET_PWD -eq 1 ]; then # Uses both explicit and implicit parameter deconfliction
+        d_echo $MSG_NORM "Password specified without ESSID, ignoring.  Assuming wired device."
         INTERFACE_TYPE=0
     fi
 
-    echo "Proceeding with INTERFACE_TYPE = $INTERFACE_TYPE"
-    echo "0 for eth; 1 for wifi; 3 for wifi/pw"
+    d_echo $MSG_DEBUG "Proceeding with INTERFACE_TYPE = $INTERFACE_TYPE"
+    d_echo $MSG_DEBUG "0 for eth; 1 for wifi; 3 for wifi with pw"
 
-    echo "options complete"
-    echo "Remaining parameters: $#"
+    d_echo $MSG_DEBUG "options complete"
+    d_echo $MSG_DEBUG "Remaining parameters: $#"
 
     if [ $# -eq 2 ]; then
-        echo "two mandatory positional arguments..."
+        d_echo $MSG_DEBUG "two mandatory positional arguments..."
         NETNS=$1
         DEVICE=$2
     else
-        echo "Ambiguous, $# positional argument(s).  Exiting."
+        d_echo $MSG_NORM "Ambiguous, $# positional argument(s).  Exiting."
         exit $BAD_ARGUMENT
     fi
 
@@ -280,41 +345,41 @@ get_arguments $@
 
 #debug
 if [ $INTERFACE_TYPE -gt 0 ]; then
-    echo "ESSID = $ESSID (if = $INTERFACE_TYPE)"
+    d_echo $MSG_DEBUG "ESSID = $ESSID (if = $INTERFACE_TYPE)"
 fi
 
 #debug
 if [ $INTERFACE_TYPE -eq 3 ]; then
-    echo "Wifi password = $WIFI_PASSWORD"
+    d_echo $MSG_DEBUG "Wifi password = $WIFI_PASSWORD"
 fi
 
 #debug
-echo "Will set up $DEVICE inside $NETNS"
+d_echo $MSG_DEBUG "Will set up $DEVICE inside $NETNS"
 
 #debug
-echo "VIRTUAL flag set to $VIRTUAL"
+d_echo $MSG_DEBUG "VIRTUAL flag set to $VIRTUAL"
 
 #debug
-echo "SPAWN SHELL = $SPAWN_SHELL"
+d_echo $MSG_DEBUG "SPAWN SHELL = $SPAWN_SHELL"
 
 
 # confirm root now, because the subsequent commands will need it
 if [ "$(whoami)" != root ]; then
-  echo "Only root can run this script. Exiting ($NO_ROOT)"
+  d_echo $MSG_NORM "Only root can run this script. Exiting ($NO_ROOT)" # MSG_FATAL? not necessarily because exit code
   exit $NO_ROOT
 fi
 
 if [ $CLEANUP_ONLY -eq 0 ]; then
 
     if [ $FORCE -eq 1 ]; then
-        echo "Forcing execution without checking for /etc/netns/$NETNS/resolv.conf"
+        d_echo $MSG_VERBOSE "Forcing execution without checking for /etc/netns/$NETNS/resolv.conf"
     else
         if [ -f "/etc/netns/$NETNS/resolv.conf" ]; then
-            echo "... /etc/netns/$NETNS/resolv.conf exists.  Hopefully it's correct!"
+            d_echo $MSG_VERBOSE "... /etc/netns/$NETNS/resolv.conf exists.  Hopefully it's correct!"
         else
-            echo "/etc/netns/$NETNS/resolv.conf missing.  Please create this or"
-            echo "run script with the -f option, and expect to set up DNS manually."
-            echo "Exiting ($NO_RESOLV_CONF)"
+            d_echo $MSG_NORM "/etc/netns/$NETNS/resolv.conf missing.  Please create this or"
+            d_echo $MSG_NORM "run script with the -f option, and expect to set up DNS manually."
+            d_echo $MSG_NORM "Exiting ($NO_RESOLV_CONF)"
             exit $NO_RESOLV_CONF
         fi
     fi
@@ -322,16 +387,16 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     # check for pre-existing network namespace
     ip netns | grep -w -o $NETNS > /dev/null
     if [ $? -ne 1 ]; then
-        echo "That namespace won't work.  Please try a different one."
-        echo "Check '$ ip netns' to make sure it's not already in use."
-        echo "Exiting ($BAD_NAMESPACE)"
+        d_echo $MSG_VERBOSE "That namespace won't work.  Please try a different one."
+        d_echo $MSG_VERBOSE "Check '$ ip netns' to make sure it's not already in use."
+        d_echo $MSG_NORM "Exiting ($BAD_NAMESPACE)"
         exit $BAD_NAMESPACE
     fi
 
     # create the namespace
     ip netns add "$NETNS"
     if [ $? -ne 0 ]; then
-        echo "Unable to create namespace $NETNS. Exiting ($BAD_NAMESPACE)"
+        d_echo $MSG_NORM "Unable to create namespace $NETNS. Exiting ($BAD_NAMESPACE)"
         exit $BAD_NAMESPACE
     fi
 
@@ -343,7 +408,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         ip link set dev "$DEVICE" netns "$NETNS"
         if [ $? -ne 0 ]; then
             EXIT_CODE=$?
-            echo "Unable to move $DEVICE to $NETNS, exiting $EXIT_CODE"
+            d_echo $MSG_NORM "Unable to move $DEVICE to $NETNS, exiting $EXIT_CODE"
             exit $EXIT_CODE
         fi
     else # wireless or virtual device
@@ -351,13 +416,13 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         if [ -z $PHY ]; then
             PHY=$DEVICE # try this as a fallback but it may not work
             PHY_FALLBACK=1
-            echo "Unable to confirm physical device name for wireless interface $DEVICE"
-            echo "Falling back on $PHY, may not work. Proceeding..."
+            d_echo $MSG_VERBOSE "Unable to confirm physical device name for wireless interface $DEVICE"
+            d_echo $MSG_VERBOSE "Falling back on $PHY, may not work. Proceeding..."
         fi
         iw phy "$PHY" set netns name "$NETNS"
         if [ $? -ne 0 ]; then
             EXIT_CODE=$?
-            echo "Unable to move $PHY to $NETNS, exiting $EXIT_CODE"
+            d_echo $MSG_NORM "Unable to move $PHY to $NETNS, exiting $EXIT_CODE"
             exit $EXIT_CODE
         fi
     fi
@@ -367,14 +432,14 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     
     if [ $? -ne 0 ]; then
         if [ $STRICTKILL -eq 1 ]; then
-            echo "Unable to confirm $DEVICE in $NETNS, enforcing --strictkill, exiting."
+            d_echo $MSG_NORM "Unable to confirm $DEVICE in $NETNS, enforcing --strictkill, exiting."
             exit $EXIT_STRICT_KILL
         fi
         if [ $STRICT -eq 1 ]; then
-            echo "Unable to confirm $DEVICE in $NETNS, enforcing --strict option and proceeding to cleanup..."
+            d_echo $MSG_VERBOSE "Unable to confirm $DEVICE in $NETNS, enforcing --strict option and proceeding to cleanup..."
             STRICT=2 # failure
         else
-            echo "Unable to confirm $DEVICE in $NETNS, will attempt to continue..."
+            d_echo $MSG_VERBOSE "Unable to confirm $DEVICE in $NETNS, will attempt to continue..."
         fi
         UNCONFIRMED_MOVE=1
     fi
@@ -386,14 +451,14 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         ip netns exec "$NETNS" ip link set dev lo up
         if [ $? -ne 0 ]; then
             if [ $STRICTKILL -eq 1 ]; then
-                echo "Could not bring up lo in $NETNS, enforcing --strictkill, exiting."
+                d_echo $MSG_NORM "Could not bring up lo in $NETNS, enforcing --strictkill, exiting."
                 exit $EXIT_STRICT_KILL
             fi
             if [ $STRICT -eq 1 ]; then
-                echo "Could not bring up lo in $NETNS, enforcing --strict option and proceeding to cleanup..."
+                d_echo $MSG_VERBOSE "Could not bring up lo in $NETNS, enforcing --strict option and proceeding to cleanup..."
                 STRICT=2
             else
-                echo "Could not bring up lo in $NETNS, something else may be wrong. Proceeding..."
+                d_echo $MSG_VERBOSE "Could not bring up lo in $NETNS, something else may be wrong. Proceeding..."
             fi
         fi
         LO_FAIL=1
@@ -403,14 +468,14 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         ip netns exec "$NETNS" ip link set dev "$DEVICE" up
         if [ $? -ne 0 ]; then
             if [ $STRICTKILL -eq 1 ]; then
-                echo "Could not bring up $DEVICE in $NETNS, enforcing --strictkill, exiting."
+                d_echo $MSG_NORM "Could not bring up $DEVICE in $NETNS, enforcing --strictkill, exiting."
                 exit $EXIT_STRICT_KILL
             fi        
             if [ $STRICT -eq 1 ]; then
-                echo "Could not bring up $DEVICE in $NETNS, enforcing --strict option and proceeding to cleanup..."
+                d_echo $MSG_VERBOSE "Could not bring up $DEVICE in $NETNS, enforcing --strict option and proceeding to cleanup..."
                 STRICT=2
             else
-                echo "Could not bring up $DEVICE in $NETNS, something probably went wrong. Proceeding..."
+                d_echo $MSG_VERBOSE "Could not bring up $DEVICE in $NETNS, something probably went wrong. Proceeding..."
             fi
         fi
         DEVICE_FAIL=1
@@ -426,33 +491,33 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         #someone please educate me if there is a better way to do this
         cat /dev/null
         if [ $? -ne 0 ]; then
-            echo "Should never encounter this, exiting."
+            d_echo $MSG_FATAL "Should never encounter this, exiting."
             exit $DEBUG_EXIT
         fi
 
         # connect to open network with iwconfig, or, with WPA supplicant if password is provided
         if [ $INTERFACE_TYPE -eq 1 ]; then
-            echo "Attempting to connect to open wifi network $ESSID..."
+            d_echo $MSG_NORM "Attempting to connect to open wifi network $ESSID..."
             ip netns exec "$NETNS" iwconfig "$DEVICE" essid "$ESSID"
         elif [ $INTERFACE_TYPE -eq 3 ]; then
-            echo "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
+            d_echo $MSG_NORM "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
             wpa_passphrase $ESSID $PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
         fi
 
         if [ $? -ne 0 ]; then
             if [ $STRICTKILL -eq 1 ]; then
-                echo "Error $? attempting to join $ESSID, enforcing --strictkill, exiting."
+                d_echo $MSG_NORM "Error $? attempting to join $ESSID, enforcing --strictkill, exiting."
                 exit $EXIT_STRICT_KILL
             fi            
             if [ $STRICT -eq 1 ]; then
-                echo "Error $? attempting to join $ESSID.  Enforcing --strict option, proceeding to cleanup..."
+                d_echo $MSG_NORM "Error $? attempting to join $ESSID.  Enforcing --strict option, proceeding to cleanup..."
                 STRICT=2
             else
-                echo "Unconfirmed attempt to join $ESSID with error $?. Proceeding..."
+                d_echo $MSG_NORM "Unconfirmed attempt to join $ESSID with error $?. Proceeding..."
             fi
         fi
 
-            echo "(DEBUG) displaying output of iwconfig in namespace $NETNS:"
+            d_echo $MSG_NORM "(DEBUG) displaying output of iwconfig in namespace $NETNS:"
             ip netns exec "$NETNS" iwconfig
         fi
     fi
@@ -462,20 +527,20 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     if [ $STRICT -ne 2 ]; then
 
         # intentional blank line
-        echo
+        d_echo $MSG_NORM
 
         # start dhclient, or, assign given STATIC_IP and GATEWAY, or, do nothing
         if [ $MANUAL_IP_CONFIG -eq 0 ]; then
-            echo "Starting dhclient..."
+            d_echo $MSG_NORM "Starting dhclient..."
             ip netns exec "$NETNS" dhclient "$DEVICE"
-            echo "(DEBUG) dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
+            d_echo $MSG_NORM "(DEBUG) dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
         elif [ $MANUAL_IP_CONFIG -eq 1]; then
-            echo "Attempting to manually configure STATIC_IP and GATEWAY.  Exit status verification not implemented yet."
+            d_echo $MSG_NORM "Attempting to manually configure STATIC_IP and GATEWAY.  Exit status verification not implemented yet."
             ip netns exec "$NETNS" ip addr add "$STATIC_IP" dev "$DEVICE" #https://www.tecmint.com/ip-command-examples/
             #ip netns exec "$NETNS" ip address add dev "$DEVICE" local "$STATIC_IP" #https://linux.die.net/man/8/ip
             ip netns exec "$NETNS" ip route add default via "$GATEWAY"
         else
-            echo "No IP host configuration set up.  Do not expect usual IP access until you address this."
+            d_echo $MSG_NORM "No IP host configuration set up.  Do not expect usual IP access until you address this."
         fi
 
         if [ $SPAWN_SHELL -eq 0 ]; then # we are done
@@ -483,24 +548,24 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         fi
 
         # Spawn a shell in the new namespace
-        echo "Spawning root shell in $NETNS..."
-        echo "... try runuser -u UserName BrowserName &"
-        echo "... and exit to kill the shell and netns, when done"
+        d_echo $MSG_NORM "Spawning root shell in $NETNS..."
+        d_echo $MSG_NORM "... try runuser -u UserName BrowserName &"
+        d_echo $MSG_NORM "... and exit to kill the shell and netns, when done"
         ip netns exec "$NETNS" su
 
     fi
     # end of setup and shell. Only cleanup remains.
 
 else # --cleanup option enabled.  Still may need to set $PHY
-    echo "Cleanup only"
+    d_echo $MSG_NORM "Cleanup only"
     if [ $VIRTUAL -eq 1 ]; then
-        echo "Detecting physical name of virtual device"
+        d_echo $MSG_NORM "Detecting physical name of virtual device"
         PHY="$(basename "$(cd "/sys/class/net/$DEVICE/phy80211" && pwd -P)")"
         if [ -z $PHY ]; then
             PHY=$DEVICE # try this as a fallback but it may not work
             PHY_FALLBACK=1
-            echo "Unable to confirm physical device name for wireless interface $DEVICE"
-            echo "Falling back on $PHY, may not work. Proceeding..."
+            d_echo $MSG_NORM "Unable to confirm physical device name for wireless interface $DEVICE"
+            d_echo $MSG_NORM "Falling back on $PHY, may not work. Proceeding..."
         fi
     fi
 fi
@@ -510,31 +575,31 @@ fi
 # In the meantime, just stop dhclient regardless and ignore any manually set IP config
 # which should go away when we kill the namespace anyway... right?
 ip netns exec "$NETNS" dhclient -r
-echo "Stopped dhclient in $NETNS with status $?"
+d_echo $MSG_NORM "Stopped dhclient in $NETNS with status $?"
 
 # Move the device back into the default namespace
 if [ $VIRTUAL -eq 0 ]; then
     ip netns exec "$NETNS" ip link set dev "$DEVICE" netns 1
-    echo "Closing wired interface status $?.  If this fails, try again with the --virtual option."
+    d_echo $MSG_NORM "Closing wired interface status $?.  If this fails, try again with the --virtual option."
 else
     ip netns exec "$NETNS" iw phy "$PHY" set netns 1
-    echo "Closing wireless/virtual interface status $?"
+    d_echo $MSG_NORM "Closing wireless/virtual interface status $?"
 fi
 
 # Remove the namespace
 ip netns del "$NETNS"
-echo "Deleted $NETNS"
+d_echo $MSG_NORM "Deleted $NETNS"
 
 # ... and just for good measure
 if [ $NMIGNORE -eq 0 ]; then
-    echo "Restarting Network Manager"
+    d_echo $MSG_NORM "Restarting Network Manager"
     service network-manager restart
 else
-    echo "Ignoring Network Manager reset"
+    d_echo $MSG_NORM "Ignoring Network Manager reset"
 fi
 
-echo
-echo "exiting... status $?"
+d_echo $MSG_NORM
+d_echo $MSG_NORM "exiting... status $?"
 
 # RESCUE:
 # if script fails and deletes the namespace without first removing the interface from the netns, try:

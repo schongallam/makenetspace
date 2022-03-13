@@ -51,7 +51,9 @@ OPTIONS:
                     be immediately usable in this state.  Incompatible with --static option.
 
 --quiet, -q         Suppress unnecessary output (ignored if --debug flag used)
---debug, -d         Enable debug output (overrides --quiet)
+--verbose, -r       Print extra information when unexpected deviations happen, but script will
+                    continue (overrides --quiet)
+--debug, -d         Enable debug output (overrides --quiet and --verbose)
 
 MANDATORY PARAMETERS
  NETNS                The name of the namespace you wish to create.
