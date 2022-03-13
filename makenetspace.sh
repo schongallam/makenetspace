@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# makenetspace v 0.1.1-alpha
+# makenetspace v 0.2.0-alpha
 # Copyright 2021 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
