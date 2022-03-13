@@ -1,3 +1,4 @@
+"""
 Usage:
 # makenetspace [OPTIONS] NETNS DEVICE
 
@@ -9,6 +10,9 @@ OPTIONS:
                     Ignored if using --cleanup.
 
 --passwd, -p <PASSWORD>   Password to use with ESSID.  Ignored if --essid not used.
+
+--getpw, -g         Gets PASSWORD from stdin instead of command line. Overrides --passwd.
+
 --force, -f         Option to force execution without a proper resolv.conf in place.
                     otherwise, script will exit.  Ignored if using --cleanup option.
 
@@ -36,13 +40,22 @@ OPTIONS:
 
 --nmignore, -i      Don't reset network-manager on cleanup.
 
---static <CIDR> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
+[ below still needs rigorous implementation testing ]
+
+--static <STATIC_IP> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
                     static ip address and default route.  IPv4 only at this time.
+                    Incompatible with --noconfig option.
                     CIDR        standard format a.b.c.d/XX
                     GATEWAY     a.b.c.d
 
+--noconfig, -o      Don't start dhclient and don't try to configure the IP manually.  Using
+                    this option will still attempt to connect to the network, but it won't
+                    be immediately usable in this state.  Incompatible with --static option.
+
 --quiet, -q         Suppress unnecessary output (ignored if --debug flag used)
---debug, -d         Enable debug output (overrides --quiet)
+--verbose, -r       Print extra information when unexpected deviations happen, but script will
+                    continue (overrides --quiet)
+--debug, -d         Enable debug output (overrides --quiet and --verbose)
 
 MANDATORY PARAMETERS
  NETNS                The name of the namespace you wish to create.
@@ -69,3 +82,4 @@ Examples:
 # makenetspace MyWifi wlp7s0 MyNetwork MyPassword
 # makenetspace --static 192.168.0.10/24 192.168.0.1 MyStaticHost eth0
 # makenetspace --cleanup MyWifi wlp7s0
+"""

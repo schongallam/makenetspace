@@ -1,7 +1,13 @@
-implement advanced parsing for command line arguments
-add an option to exit the script at the point it would normally spawn the shell
-add an option to clean up an existing netns
+NEXT: Test this as thoroughly as possible, then merge into active
+
 add DEVICE verification
-add option to determine if network-manager service will be reset before exiting
-add an option to control DHCP client usage vs. ip command static setup vs. something else
 assess input verification needs
+test everything
+update readme
+
+implement advanced parsing for command line arguments - done 2022-03-09
+add an option to exit the script at the point it would normally spawn the shell - done 2022-03-09
+add an option to clean up an existing netns - done 2022-03-09
+add option to determine if network-manager service will be reset before exiting - done 2022-03-09
+add the ability to join an open wifi network (i.e. no wpa_supplicant) - done 2022-03-09
+add an option to control DHCP client usage vs. ip command static setup vs. something else - done 2022-03-09
