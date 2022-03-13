@@ -32,17 +32,24 @@
 
 ### INTERNAL VARIABLES ###
 
-# Debug levels for stdout messages
-MSG_FATAL=0             # Something programatically went wrong. Will always print.
-MSG_NORM=1              # 'Normal' information that would be good to display in most cases.
-MSG_VERBOSE=2           # Something deviated from the expected, but script will attempt to proceed.
-MSG_DEBUG=5             # 'Debug'-level info, for instance printing a variable, or following the
-                        # programmatic flow of the script.
+# Debug levels for stdout messages, used like constants
+#  MSG_FATAL            Something programatically went wrong. Will always print.
+MSG_FATAL=0
+
+#  MSG_NORM             'Normal' information that would be good to display in most cases. Production default.
+#                       Examples: user errors that force script to exit, and important notifications.
+MSG_NORM=1
+
+#  MSG_VERBOSE          Something deviated from the expected, but script will attempt to proceed. Testing default.
+#                       Examples: 
+MSG_VERBOSE=2
+
+#  MSG_DEBUG            'Debug'-level info, for instance printing a variable, or tracing the
+#                       programmatic flow of the script.
+MSG_DEBUG=5
 
 #
 # Option-determined variables:
-#  ESSID                ESSID of wireless network
-#  WIFI_PASSWORD        Password of wireless network
 #  FORCE                defaults to 0.  1 if skipping check for /etc/netns/$NETNS/resolv.conf ;
 #                       determined by --force
 FORCE=0
@@ -50,9 +57,17 @@ FORCE=0
 #  INTERFACE_TYPE       defaults to 0-> wired; 1->wifi, no PW; 2->PW without wifi (invalid); 3->wifi+PW
 #                       determined by presence of --essid and -passwd options
 INTERFACE_TYPE=0
-SET_WIFI=0              # 1 if -essid is invoked.  Used only for explicit parameter auditing
-SET_PWD=0               # 1 if --passwd is invoked.  Used only for explicit parameter auditing,
-                        # this should never be 1 if SET_WIFI is 0
+
+#  SET_WIFI             1 if -essid is invoked.  Used only for explicit parameter auditing
+SET_WIFI=0
+
+#  ESSID                ESSID of wireless network, undefined unless explicitly set
+
+#  SET_PWD              1 if --passwd is invoked.  Used only for explicit parameter auditing,
+#                       this should never be 1 if SET_WIFI is 0
+SET_PWD=0
+
+#  WIFI_PASSWORD        Password of wireless network, undefined unless explicitly set
 
 #  SPAWN_SHELL          defaults to true (1).  False with --noshell, -n option
 SPAWN_SHELL=1
@@ -81,20 +96,19 @@ STRICTKILL=0
 #                       set to true (1) by --nmignore, -i
 NMIGNORE=0
 
-# MANUAL_IP_CONFIG      defaults to 0.  Set to 1 by --static option, which collects STATIC_IP and
+#  MANUAL_IP_CONFIG     defaults to 0.  Set to 1 by --static option, which collects STATIC_IP and
 #                       GATEWAY.  Set to 2 by --noconfig, -o option, to indicate skipping host
 #                       IP configuration entirely.
 MANUAL_IP_CONFIG=0
 SET_STATIC=0            # 1 if --static option is invoked
 SET_NOCONFIG=0          # 1 if --noconfig is invoked
 
-# DEBUG_LEVEL           Triggers or suppresses output based on debug relevancy
-DEBUG_LEVEL=$MSG_VERBOSE #TODO: set to MSG_NORMAL in production release
+#  DEBUG_LEVEL          Triggers or suppresses output based on debug relevancy. Default depends on
+#                       production vs testing status. (production->MSG_NORM; testing->MSG_VERBOSE)
+DEBUG_LEVEL=$MSG_VERBOSE    #TODO: set to MSG_NORMAL in production release
 SET_QUIET=0             # 1 if --quiet option is invoked
-SET_DEBUG=0             # 1 if --debug option is invoked
 SET_VERBOSE=0           # 1 if --verbose option is invoked
-
-
+SET_DEBUG=0             # 1 if --debug option is invoked
 
 #
 # Other internal variables:
@@ -108,7 +122,7 @@ SET_VERBOSE=0           # 1 if --verbose option is invoked
 #  LO_FAIL              (UNUSED) 1 if unable to raise lo interface in NETNS
 #  DEVICE_FAIL          (UNUSED) 1 if unable to raise DEVICE in NETNS
 
-
+#
 # OTHER EXIT CODES:
 NORMAL=0                # normal exit
 HELP=0                  # help/description shown
@@ -120,14 +134,41 @@ STRICT_WITH_CLEANUP=5   # could not verify that DEVICE was moved into NETNS.  NE
 EXIT_STRICT_KILL=6      # could not verify that DEVICE was moved into NETNS.  Exited immediately.
 DEBUG_EXIT=10           # used for debugging purposes
 
+
+### SUBROUTINES ###
+
 # Printing to stdout based on DEBUG_LEVEL
 d_echo() {
     if [ $1 -le $DEBUG_LEVEL ]; then echo "$2"; fi
 }
 
-# HELP TEXT:
+#debug output
+var_dump() {
+    echo "FORCE = $FORCE"
+    echo "INTERFACE_TYPE = $INTERFACE_TYPE"
+    echo "SET_WIFI = $SET_WIFI"
+    echo "ESSID = $ESSID"
+    echo "SET_PWD = $SET_PWD"
+    echo "WIFI_PASSWORD = $WIFI_PASSWORD"
+    echo "SPAWN_SHELL = $SPAWN_SHELL"
+    echo "CLEANUP_ONLY = $CLEANUP_ONLY"
+    echo "VIRTUAL = $VIRTUAL"
+    echo "STRICT = $STRICT"
+    echo "STRICTKILL = $STRICTKILL"
+    echo "NMIGNORE = $NMIGNORE"
+    echo "MANUAL_IP_CONFIG = $MANUAL_IP_CONFIG"
+    echo "SET_STATIC = $SET_STATIC"
+    echo "SET_NOCONFIG = $SET_NOCONFIG"
+    echo "DEBUG_LEVEL = $DEBUG_LEVEL"
+    echo "SET_QUIET = $SET_QUIET"
+    echo "SET_VERBOSE = $SET_VERBOSE"
+    echo "SET_DEBUG = $SET_DEBUG"
+}
+
+# HELP TEXT: (ignore debug level for stdout messages, always print)
 usage() {
 
+    #TODO: UPDATE WHEN COMPLETE
     echo "usage:"
     echo "$ makenetspace [-f] NETNS DEVICE [ESSID] [PASSWORD]"
     echo    
@@ -282,10 +323,10 @@ get_arguments() {
     # Now check for certain conflicting options
     #  in certain cases, implicit parameter auditing was implemented initially, but this could be subject to
     #  abuse or undocumented behavior if someone uses the same argument multiple times.  To account for this,
-    #  explicit checking was implemented
+    #  explicit checking was later implemented
 
     # Currently using discrete options to set debug output level.
-    # May want to use an integer option in the future, but that would make the parameter less intuitive.
+    # Considered using an integer option in the future, but that would make the parameter less intuitive.
     if [ $SET_QUIET -eq 1 ]; then # lowest priority option
         DEBUG_LEVEL=$MSG_FATAL
     fi
@@ -338,30 +379,15 @@ get_arguments() {
 }
 
 #
-# SCRIPT ENTRY POINT
+### SCRIPT ENTRY POINT ###
 #
 
 get_arguments $@
 
 #debug
-if [ $INTERFACE_TYPE -gt 0 ]; then
-    d_echo $MSG_DEBUG "ESSID = $ESSID (if = $INTERFACE_TYPE)"
+if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
+    var_dump
 fi
-
-#debug
-if [ $INTERFACE_TYPE -eq 3 ]; then
-    d_echo $MSG_DEBUG "Wifi password = $WIFI_PASSWORD"
-fi
-
-#debug
-d_echo $MSG_DEBUG "Will set up $DEVICE inside $NETNS"
-
-#debug
-d_echo $MSG_DEBUG "VIRTUAL flag set to $VIRTUAL"
-
-#debug
-d_echo $MSG_DEBUG "SPAWN SHELL = $SPAWN_SHELL"
-
 
 # confirm root now, because the subsequent commands will need it
 if [ "$(whoami)" != root ]; then
@@ -455,7 +481,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 exit $EXIT_STRICT_KILL
             fi
             if [ $STRICT -eq 1 ]; then
-                d_echo $MSG_VERBOSE "Could not bring up lo in $NETNS, enforcing --strict option and proceeding to cleanup..."
+                d_echo $MSG_NORM "Could not bring up lo in $NETNS, enforcing --strict option and proceeding to cleanup..."
                 STRICT=2
             else
                 d_echo $MSG_VERBOSE "Could not bring up lo in $NETNS, something else may be wrong. Proceeding..."
@@ -472,7 +498,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 exit $EXIT_STRICT_KILL
             fi        
             if [ $STRICT -eq 1 ]; then
-                d_echo $MSG_VERBOSE "Could not bring up $DEVICE in $NETNS, enforcing --strict option and proceeding to cleanup..."
+                d_echo $MSG_NORM "Could not bring up $DEVICE in $NETNS, enforcing --strict option and proceeding to cleanup..."
                 STRICT=2
             else
                 d_echo $MSG_VERBOSE "Could not bring up $DEVICE in $NETNS, something probably went wrong. Proceeding..."
@@ -513,12 +539,14 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 d_echo $MSG_NORM "Error $? attempting to join $ESSID.  Enforcing --strict option, proceeding to cleanup..."
                 STRICT=2
             else
-                d_echo $MSG_NORM "Unconfirmed attempt to join $ESSID with error $?. Proceeding..."
+                d_echo $MSG_VERBOSE "Unconfirmed attempt to join $ESSID with error $?. Proceeding..."
             fi
         fi
 
-            d_echo $MSG_NORM "(DEBUG) displaying output of iwconfig in namespace $NETNS:"
-            ip netns exec "$NETNS" iwconfig
+            d_echo $MSG_DEBUG "Displaying output of iwconfig in namespace $NETNS:"
+            if [ $DEBUG_LEVEL -ge $MSG_DEBUG ]; then
+                ip netns exec "$NETNS" iwconfig
+            fi
         fi
     fi
 
@@ -527,20 +555,20 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     if [ $STRICT -ne 2 ]; then
 
         # intentional blank line
-        d_echo $MSG_NORM
+        d_echo $MSG_NORM ""
 
         # start dhclient, or, assign given STATIC_IP and GATEWAY, or, do nothing
         if [ $MANUAL_IP_CONFIG -eq 0 ]; then
             d_echo $MSG_NORM "Starting dhclient..."
             ip netns exec "$NETNS" dhclient "$DEVICE"
-            d_echo $MSG_NORM "(DEBUG) dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
+            d_echo $MSG_DEBUG "dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
         elif [ $MANUAL_IP_CONFIG -eq 1]; then
             d_echo $MSG_NORM "Attempting to manually configure STATIC_IP and GATEWAY.  Exit status verification not implemented yet."
             ip netns exec "$NETNS" ip addr add "$STATIC_IP" dev "$DEVICE" #https://www.tecmint.com/ip-command-examples/
             #ip netns exec "$NETNS" ip address add dev "$DEVICE" local "$STATIC_IP" #https://linux.die.net/man/8/ip
             ip netns exec "$NETNS" ip route add default via "$GATEWAY"
         else
-            d_echo $MSG_NORM "No IP host configuration set up.  Do not expect usual IP access until you address this."
+            d_echo $MSG_NORM "No IP host configuration set up.  Do not expect usual network access until you address this."
         fi
 
         if [ $SPAWN_SHELL -eq 0 ]; then # we are done
@@ -549,8 +577,8 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
         # Spawn a shell in the new namespace
         d_echo $MSG_NORM "Spawning root shell in $NETNS..."
-        d_echo $MSG_NORM "... try runuser -u UserName BrowserName &"
-        d_echo $MSG_NORM "... and exit to kill the shell and netns, when done"
+        d_echo $MSG_VERBOSE "... try runuser -u UserName BrowserName &"
+        d_echo $MSG_VERBOSE "... and exit to kill the shell and netns, when done"
         ip netns exec "$NETNS" su
 
     fi
@@ -559,13 +587,13 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 else # --cleanup option enabled.  Still may need to set $PHY
     d_echo $MSG_NORM "Cleanup only"
     if [ $VIRTUAL -eq 1 ]; then
-        d_echo $MSG_NORM "Detecting physical name of virtual device"
+        d_echo $MSG_VERBOSE "Detecting physical name of virtual device"
         PHY="$(basename "$(cd "/sys/class/net/$DEVICE/phy80211" && pwd -P)")"
         if [ -z $PHY ]; then
             PHY=$DEVICE # try this as a fallback but it may not work
             PHY_FALLBACK=1
-            d_echo $MSG_NORM "Unable to confirm physical device name for wireless interface $DEVICE"
-            d_echo $MSG_NORM "Falling back on $PHY, may not work. Proceeding..."
+            d_echo $MSG_VERBOSE "Unable to confirm physical device name for wireless interface $DEVICE"
+            d_echo $MSG_VERBOSE "Falling back on $PHY, may not work. Proceeding..."
         fi
     fi
 fi
@@ -598,8 +626,8 @@ else
     d_echo $MSG_NORM "Ignoring Network Manager reset"
 fi
 
-d_echo $MSG_NORM
-d_echo $MSG_NORM "exiting... status $?"
+d_echo $MSG_VERBOSE ""
+d_echo $MSG_VERBOSE "exiting, status $?"
 
 # RESCUE:
 # if script fails and deletes the namespace without first removing the interface from the netns, try:
