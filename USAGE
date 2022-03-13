@@ -11,6 +11,8 @@ OPTIONS:
 
 --passwd, -p <PASSWORD>   Password to use with ESSID.  Ignored if --essid not used.
 
+--getpw, -g         Gets PASSWORD from stdin instead of command line. Overrides --passwd.
+
 --force, -f         Option to force execution without a proper resolv.conf in place.
                     otherwise, script will exit.  Ignored if using --cleanup option.
 
