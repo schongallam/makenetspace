@@ -160,6 +160,7 @@ var_dump() {
     echo "SET_WIFI = $SET_WIFI"
     echo "ESSID = $ESSID"
     echo "SET_PWD = $SET_PWD"
+    echo "GET_PWD = $GET_PWD"
     echo "WIFI_PASSWORD = $WIFI_PASSWORD"
     echo "SPAWN_SHELL = $SPAWN_SHELL"
     echo "CLEANUP_ONLY = $CLEANUP_ONLY"
