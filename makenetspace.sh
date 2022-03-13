@@ -50,22 +50,29 @@ MSG_DEBUG=5
 
 #
 # Option-determined variables:
+#  NETNS                User-specified name of the namespace to create, populate, and/or cleanup
+#
+#  DEVICE               User-specified identified of the network device
+#
 #  FORCE                defaults to 0.  1 if skipping check for /etc/netns/$NETNS/resolv.conf ;
 #                       determined by --force
 FORCE=0
 
 #  INTERFACE_TYPE       defaults to 0-> wired; 1->wifi, no PW; 2->PW without wifi (invalid); 3->wifi+PW
-#                       determined by presence of --essid and -passwd options
+#                       determined by presence of --essid and --passwd options
 INTERFACE_TYPE=0
 
 #  SET_WIFI             1 if -essid is invoked.  Used only for explicit parameter auditing
 SET_WIFI=0
 
 #  ESSID                ESSID of wireless network, undefined unless explicitly set
-
+#
 #  SET_PWD              1 if --passwd is invoked.  Used only for explicit parameter auditing,
 #                       this should never be 1 if SET_WIFI is 0
 SET_PWD=0
+
+#  GET_PWD              1 if --getpw, -g is invoked
+GET_PWD=0
 
 #  WIFI_PASSWORD        Password of wireless network, undefined unless explicitly set
 
@@ -103,6 +110,10 @@ MANUAL_IP_CONFIG=0
 SET_STATIC=0            # 1 if --static option is invoked
 SET_NOCONFIG=0          # 1 if --noconfig is invoked
 
+#  STATIC_IP            set by --static option.  XXX.XXX.XXX.XXX/YY format expected.  No input checking yet.
+#
+#  GATEWAY              set by --static option.  XXX.XXX.XXX.XXX format expected.  No input checking yet.
+#
 #  DEBUG_LEVEL          Triggers or suppresses output based on debug relevancy. Default depends on
 #                       production vs testing status. (production->MSG_NORM; testing->MSG_VERBOSE)
 DEBUG_LEVEL=$MSG_VERBOSE    #TODO: set to MSG_NORMAL in production release
@@ -158,11 +169,15 @@ var_dump() {
     echo "NMIGNORE = $NMIGNORE"
     echo "MANUAL_IP_CONFIG = $MANUAL_IP_CONFIG"
     echo "SET_STATIC = $SET_STATIC"
+    echo "STATIC_IP = $STATIC_IP"
+    echo "GATEWAY = $GATEWAY"
     echo "SET_NOCONFIG = $SET_NOCONFIG"
     echo "DEBUG_LEVEL = $DEBUG_LEVEL"
     echo "SET_QUIET = $SET_QUIET"
     echo "SET_VERBOSE = $SET_VERBOSE"
     echo "SET_DEBUG = $SET_DEBUG"
+    echo "NETNS = $NETNS"
+    echo "DEVICE = $DEVICE"
 }
 
 # HELP TEXT: (ignore debug level for stdout messages, always print)
@@ -216,8 +231,9 @@ usage() {
 # Process options and positional arguments
 get_arguments() {
 
-    d_echo $MSG_NORM "get_arguments: zero is $0, one is $1" #not MSG_DEBUG because that option hasnt been set yet
-    d_echo $MSG_NORM "Get options first... count is $#"
+    # d_echo $MSG_NORM "get_arguments: zero is $0, one is $1" 
+    # d_echo $MSG_NORM "Get options first... count is $#"
+    #not MSG_DEBUG because that option hasnt been set yet
 
     INTERFACE_TYPE=0
 
@@ -235,18 +251,24 @@ get_arguments() {
                 SET_WIFI=1 # used only for explicit parameter auditing
                 shift
                 shift
-            ;;
+                ;;
             --passwd|-p)
                 if [ $# -lt 2 ]; then
                     d_echo $MSG_NORM "Argument missing after password."
                     exit $BAD_ARGUMENT
                 fi
                 WIFI_PASSWORD=$2
-                INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
-                SET_PWD=1 # used only for explicit parameter auditing
+                SET_PWD=1 # used for explicit parameter auditing and warning if --getpw is also used
                 shift
                 shift
-            ;;
+                ;;
+            --getpw|-g)
+                if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then
+                    INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
+                fi
+                GET_PWD=1
+                shift
+                ;;
             --static)
                 if [ $# -lt 3 ]; then
                     d_echo $MSG_NORM "Arguments missing for --static <STATIC_IP> <GATEWAY>"
@@ -272,7 +294,7 @@ get_arguments() {
             --virtual|-v)
                 VIRTUAL=1
                 shift
-            ;;
+                ;;
             --noshell|-n)
                 SPAWN_SHELL=0
                 shift
@@ -289,7 +311,7 @@ get_arguments() {
                 STRICTKILL=1
                 shift
                 ;;
-            --nmingore|-i)
+            --nmignore|-i)
                 NMIGNORE=1
                 shift
                 ;;
@@ -297,7 +319,7 @@ get_arguments() {
                 SET_QUIET=1
                 shift
                 ;;
-            --verbose|-v)
+            --verbose|-r)
                 SET_VERBOSE=1
                 shift
                 ;;
@@ -309,8 +331,13 @@ get_arguments() {
                 usage
                 exit $HELP
                 ;;
-            --*|-*)
-                d_echo $MSG_NORM "Unrecognized $1.  Sorry, flag stacking is not supported yet."
+            --*)
+                d_echo $MSG_NORM "Unrecognized option, $1."
+                d_echo $MSG_NORM "try $0 --help or $0 -h"
+                exit $BAD_ARGUMENT
+                ;;
+            -*)
+                d_echo $MSG_NORM "Unrecognized option, $1.  Sorry, flag stacking is not supported yet."
                 d_echo $MSG_NORM "try $0 --help or $0 -h"
                 exit $BAD_ARGUMENT
                 ;;
@@ -339,6 +366,10 @@ get_arguments() {
         DEBUG_LEVEL=$MSG_DEBUG
     fi
 
+    if [ $SET_PWD -eq 1 -a $GET_PWD -eq 1 ]; then
+        d_echo $MSG_VERBOSE "Ignoring --passwd option."
+    fi
+
     if [ $SPAWN_SHELL -eq 0 -a $CLEANUP_ONLY -eq 1 ]; then
         d_echo $MSG_NORM "--noshell and --cleanup options are incompatible.  Exiting."
         exit $BAD_ARGUMENT
@@ -350,13 +381,19 @@ get_arguments() {
     fi
 
     if [ $MANUAL_IP_CONFIG -gt 2 ] || 
-       [ $SET_DEBUG -eq 1 -a $SET_NOCONFIG -eq 1 ]; then # Uses both implicit and explicit parameter deconfliction
+       [ $SET_STATIC -eq 1 -a $SET_NOCONFIG -eq 1 ]; then # Uses both implicit and explicit parameter deconfliction
+        d_echo $MSG_DEBUG "MANUAL_IP_CONFIG = $MANUAL_IP_CONFIG"
+        d_echo $MSG_DEBUG "SET_STATIC = $SET_STATIC"
+        d_echo $MSG_DEBUG "SET_NOCONFIG = $SET_NOCONFIG"
         d_echo $MSG_NORM "--static and --noconfig are incompatible.  Exiting."
         exit $BAD_ARGUMENT
     fi
 
     if [ $INTERFACE_TYPE -eq 2 ] ||
        [ $SET_WIFI -eq 0 -a $SET_PWD -eq 1 ]; then # Uses both explicit and implicit parameter deconfliction
+        d_echo $MSG_DEBUG "INTERFACE_TYPE = $INTERFACE_TYPE"
+        d_echo $MSG_DEBUG "SET_WIFI = $SET_WIFI"
+        d_echo $MSG_DEBUG "SET_PWD = $SET_PWD"
         d_echo $MSG_NORM "Password specified without ESSID, ignoring.  Assuming wired device."
         INTERFACE_TYPE=0
     fi
@@ -372,8 +409,24 @@ get_arguments() {
         NETNS=$1
         DEVICE=$2
     else
-        d_echo $MSG_NORM "Ambiguous, $# positional argument(s).  Exiting."
+        d_echo $MSG_NORM "$0 --help for usage"
+        d_echo $MSG_VERBOSE "Ambiguous, $# positional argument(s).  Exiting."
         exit $BAD_ARGUMENT
+    fi
+
+    # everything checks good so far, so collect the wifi password from STDIN if indicated
+    if [ $GET_PWD -eq 1 -a $SET_WIFI -eq 1 ]; then
+        if [ $DEBUG_LEVEL -gt $MSG_NORM ]; then
+            echo -n "Enter WIFI password: "
+        fi
+
+        trap 'stty echo' EXIT
+        stty -echo
+        read WIFI_PASSWORD
+        stty echo
+        trap - EXIT
+
+        if [ $DEBUG_LEVEL -gt $MSG_NORM ]; then echo; fi
     fi
 
 }
