@@ -316,6 +316,14 @@ get_arguments() {
                 NMIGNORE=1
                 shift
                 ;;
+            --physical)
+                if [ $# -lt 2 ]; then
+                    d_echo $MSG_NORM "Argument missing after --physical. Try $0 --help or $0 -h"
+                    exit $BAD_ARGUMENT
+                fi
+                echo "$(basename "$(cd "/sys/class/net/$2/phy80211" && pwd -P)")"
+                exit $NORMAL
+                ;;                
             --quiet|-q)
                 SET_QUIET=1
                 shift
@@ -450,7 +458,11 @@ if [ "$(whoami)" != root ]; then
   exit $NO_ROOT
 fi
 
+d_echo $MSG_DEBUG "CLEANUP_ONLY = $CLEANUP_ONLY"
+
 if [ $CLEANUP_ONLY -eq 0 ]; then
+
+    d_echo $MSG_DEBUG "Checking for resolv.conf..."
 
     if [ $FORCE -eq 1 ]; then
         d_echo $MSG_VERBOSE "Forcing execution without checking for /etc/netns/$NETNS/resolv.conf"
@@ -465,6 +477,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         fi
     fi
 
+    d_echo $MSG_DEBUG "Checking for pre-existing netns $NETNS..."
     # check for pre-existing network namespace
     ip netns | grep -w -o $NETNS > /dev/null
     if [ $? -ne 1 ]; then
@@ -474,6 +487,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         exit $BAD_NAMESPACE
     fi
 
+    d_echo $MSG_DEBUG "Creating netns $NETNS..."
     # create the namespace
     ip netns add "$NETNS"
     if [ $? -ne 0 ]; then
@@ -481,11 +495,13 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         exit $BAD_NAMESPACE
     fi
 
+    d_echo $MSG_DEBUG "Setting $DEVICE down..."
     # not technically required... or is it?
     ip link set dev "$DEVICE" down
 
     # Wired or wireless?  If wireless, we need to reference the physical device
     if [ $VIRTUAL -eq 0 ]; then # wired or physical device
+        d_echo $MSG_DEBUG "...physical device..."
         ip link set dev "$DEVICE" netns "$NETNS"
         if [ $? -ne 0 ]; then
             EXIT_CODE=$?
@@ -493,7 +509,9 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             exit $EXIT_CODE
         fi
     else # wireless or virtual device
+        d_echo $MSG_DEBUG "...virtual or wifi device..."
         PHY="$(basename "$(cd "/sys/class/net/$DEVICE/phy80211" && pwd -P)")"
+        d_echo $MSG_DEBUG "...attempted to identify PHY = $PHY..."
         if [ -z $PHY ]; then
             PHY=$DEVICE # try this as a fallback but it may not work
             PHY_FALLBACK=1
@@ -504,13 +522,21 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         if [ $? -ne 0 ]; then
             EXIT_CODE=$?
             d_echo $MSG_NORM "Unable to move $PHY to $NETNS, exiting $EXIT_CODE"
+            d_echo $MSG_VERBOSE "(Try --virtual option for wifi devices without a given ESSID)"
             exit $EXIT_CODE
         fi
     fi
 
     # Check for success
-    ip netns exec $NETNS ip link show | grep $DEVICE > /dev/null # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
+
+    if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
+        echo "Checking for success moving device $DEVICE to netns $NETNS, running ip link show..."
+        ip netns exec $NETNS ip link show | grep $DEVICE # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
+    else
+        ip netns exec $NETNS ip link show | grep $DEVICE > /dev/null # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
+    fi
     
+    d_echo $MSG_DEBUG "Evaluating strict/kill citeria..."
     if [ $? -ne 0 ]; then
         if [ $STRICTKILL -eq 1 ]; then
             d_echo $MSG_NORM "Unable to confirm $DEVICE in $NETNS, enforcing --strictkill, exiting."
@@ -527,6 +553,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
     # Skip the next steps if STRICT option enforced
 
+    d_echo $MSG_DEBUG "Bring up lo..."
     # Bring up lo and $DEVICE
     if [ $STRICT -ne 2 ]; then
         ip netns exec "$NETNS" ip link set dev lo up
@@ -535,6 +562,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 d_echo $MSG_NORM "Could not bring up lo in $NETNS, enforcing --strictkill, exiting."
                 exit $EXIT_STRICT_KILL
             fi
+
             if [ $STRICT -eq 1 ]; then
                 d_echo $MSG_NORM "Could not bring up lo in $NETNS, enforcing --strict option and proceeding to cleanup..."
                 STRICT=2
@@ -545,6 +573,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         LO_FAIL=1
     fi
 
+    d_echo $MSG_DEBUG "Bring up $DEVICE..."
     if [ $STRICT -ne 2 ]; then
         ip netns exec "$NETNS" ip link set dev "$DEVICE" up
         if [ $? -ne 0 ]; then
@@ -565,6 +594,8 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
     # Connect to wifi, if required.
     # TODO: testing of the no-password method, using iwconfig
+
+    d_echo $MSG_DEBUG "Will connect to Wifi if required..."
 
     if [ $STRICT -ne 2 ]; then
     
@@ -598,15 +629,17 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             fi
         fi
 
-            d_echo $MSG_DEBUG "Displaying output of iwconfig in namespace $NETNS:"
-            if [ $DEBUG_LEVEL -ge $MSG_DEBUG ]; then
-                ip netns exec "$NETNS" iwconfig
-            fi
+        d_echo $MSG_DEBUG "Displaying output of iwconfig in namespace $NETNS:"
+        if [ $DEBUG_LEVEL -ge $MSG_DEBUG ]; then
+            ip netns exec "$NETNS" iwconfig
         fi
+
     fi
 
     # TODO: enable timeout limits or other failover parameters for dhclient call
 
+    d_echo $MSG_DEBUG "Configuring IP with either dhclient or ip command..."
+    
     if [ $STRICT -ne 2 ]; then
 
         # intentional blank line
@@ -617,7 +650,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             d_echo $MSG_NORM "Starting dhclient..."
             ip netns exec "$NETNS" dhclient "$DEVICE"
             d_echo $MSG_DEBUG "dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
-        elif [ $MANUAL_IP_CONFIG -eq 1]; then
+        elif [ $MANUAL_IP_CONFIG -eq 1 ]; then
             d_echo $MSG_NORM "Attempting to manually configure STATIC_IP and GATEWAY.  Exit status verification not implemented yet."
             ip netns exec "$NETNS" ip addr add "$STATIC_IP" dev "$DEVICE" #https://www.tecmint.com/ip-command-examples/
             #ip netns exec "$NETNS" ip address add dev "$DEVICE" local "$STATIC_IP" #https://linux.die.net/man/8/ip
@@ -642,7 +675,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 else # --cleanup option enabled.  Still may need to set $PHY
     d_echo $MSG_NORM "Cleanup only"
     if [ $VIRTUAL -eq 1 ]; then
-        d_echo $MSG_VERBOSE "Detecting physical name of virtual device"
+        d_echo $MSG_VERBOSE "Detecting physical name of virtual device for cleanup only"
         PHY="$(basename "$(cd "/sys/class/net/$DEVICE/phy80211" && pwd -P)")"
         if [ -z $PHY ]; then
             PHY=$DEVICE # try this as a fallback but it may not work
@@ -663,10 +696,14 @@ d_echo $MSG_NORM "Stopped dhclient in $NETNS with status $?"
 # Move the device back into the default namespace
 if [ $VIRTUAL -eq 0 ]; then
     ip netns exec "$NETNS" ip link set dev "$DEVICE" netns 1
-    d_echo $MSG_NORM "Closing wired interface status $?.  If this fails, try again with the --virtual option."
+    d_echo $MSG_NORM "Closing wired interface status $?.  If this fails, try again with --virtual"
 else
     ip netns exec "$NETNS" iw phy "$PHY" set netns 1
-    d_echo $MSG_NORM "Closing wireless/virtual interface status $?"
+    TEMP_EXIT=$?
+    d_echo $MSG_NORM "Closing wireless/virtual interface status $TEMP_EXIT"
+    if [ $TEMP_EXIT -ne 0 ]; then
+        d_echo $MSG_VERBOSE "(Try using --virtual and providing physical device name next time)"
+    fi
 fi
 
 # Remove the namespace

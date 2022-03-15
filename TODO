@@ -1,10 +1,13 @@
-NEXT: Test this on a network device
+NEXT: Test functionality of static IP configuration for ethernet
 
+add an option which shows the physical device name for a virtual device
 add DEVICE verification
 assess input verification needs
 update readme
 update usage subroutine text
 
+tested static IP configuration for wifi - 2022-03-14
+tested general use on wifi and ethernet devices, with dhclient usage - 2022-03-14
 tested option parsing, added get wifi password from stdin - 2022-03-12
 implement advanced parsing for command line arguments - done 2022-03-09
 add an option to exit the script at the point it would normally spawn the shell - done 2022-03-09

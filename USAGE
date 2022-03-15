@@ -29,7 +29,9 @@ OPTIONS:
                     them before using this option.  Otherwise, you will have to search for
                     and kill the relevant processes to reclaim the extra devices.  This
                     option can also be employed as a rescue attempt. Incompatible with the
-                    --noshell option.
+                    --noshell option.  NOTE: if you intend to cleanup a wifi device, it
+                    will work the most cleanly if you use the --virtual option and provide
+                    the physical device name (i.e. "phy0") as DEVICE.
 
 --strict, -s        Strict verification that DEVICE was successfully moved into NETNS.
                     upon failure, cleans up the namespace before exiting.  Ignored if
@@ -39,8 +41,6 @@ OPTIONS:
                     over regular --strict.  Ignored if using --cleanup option.
 
 --nmignore, -i      Don't reset network-manager on cleanup.
-
-[ below still needs rigorous implementation testing ]
 
 --static <STATIC_IP> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
                     static ip address and default route.  IPv4 only at this time.
@@ -52,10 +52,15 @@ OPTIONS:
                     this option will still attempt to connect to the network, but it won't
                     be immediately usable in this state.  Incompatible with --static option.
 
+--physical <WIFI>   Shows the physical name of WIFI device, then exits immediately.  This will
+                    fail if WIFI device is already in a namespace.
+
 --quiet, -q         Suppress unnecessary output (ignored if --debug flag used)
 --verbose, -r       Print extra information when unexpected deviations happen, but script will
                     continue (overrides --quiet)
 --debug, -d         Enable debug output (overrides --quiet and --verbose)
+
+                    
 
 MANDATORY PARAMETERS
  NETNS                The name of the namespace you wish to create.
