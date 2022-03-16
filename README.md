@@ -8,6 +8,7 @@ Another example situation would be configuring a network device over a physical 
 
 This script was created and tested on Linux Mint 20.1.
 
+## usage:
 ```usage:
 
 Briefly, 
@@ -23,62 +24,60 @@ Note 1: this script must be run as the superuser.
 Note 2: before using this script, you should have a custom resolv.conf file that already exists in the folder /etc/netns/$NETNS, the purpose is to have this file bind to /etc/resolv.conf within the new namespace.  Without this you will have to manually set up DNS (see --force option).
 ```
 
-```Examples:
-
+## examples
 Make a namespace called testspace, move the wifi interface into it, connect to ESSID myWifi with the given password:
 
-# makenetspace.sh --essid myWifi --passwd abcd1234 testspace wifi0
+`# makenetspace.sh --essid myWifi --passwd abcd1234 testspace wifi0`
 
 Same, but get the password from stdin:
 
-# makenetspace.sh --essid myWifi --getpw testspace wifi0
+`# makenetspace.sh --essid myWifi --getpw testspace wifi0`
 
 Try to find the name of the physical interface represented by a wifi device, then exit (does not require root):
 
-$ makenetspace.sh --physical wlp7s0
+`$ makenetspace.sh --physical wlp7s0`
 
 Connect a wired interface to namespace myConfig, with a static IP configuration.  Cleanup if there are any errors, otherwise exit in the parent namespace:
 
-# makenetspace.sh --noshell --strict --static 192.168.0.2/24 192.168.0.1 myConfig eth0
+`# makenetspace.sh --noshell --strict --static 192.168.0.2/24 192.168.0.1 myConfig eth0`
 
 Connect a wired interface, but you want forego a shell and set up another IP and routing configuration separately:
 
-# makenetspace.sh --noconfig --noshell myConfig eth0
+`# makenetspace.sh --noconfig --noshell myConfig eth0`
 
 Clean up a namespace with a wired interface:
 
-# makenetspace.sh --cleanup myConfig eth0
+`# makenetspace.sh --cleanup myConfig eth0`
 
 If a namespace setup attempt with wifi failed due for some reason, you can cleanup with:
 
-# makenetspace.sh --cleanup --virtual testspace phy0
+`# makenetspace.sh --cleanup --virtual testspace phy0`
 
 For the last example, yes, it is counterintuitive to use --virtual and phy0 together.  The rationale is that if the interface is already in the namespace (which is likely), the script is not able to determine the physical interface name.  So, the physical interface name needs to be provided.  And the --virtual option tells the script to assume it's recovering a wireless interface, so call iw instead of ip.
+
+
+## script flow:
+
+-Set global variables
+-Interpret command line arguments
+-Confirm root
+-If --cleanup option is used, skip below past spawning the shell
+-Conditionally check for /etc/$NETNS/resolv.conf (can be overridden)
+-Make sure network namespace doesn't already exist, then try to create it
+-Bring down the device before moving it
+-If it's a virtual or wireless device, detect the corresponding physical device name
+-Make the namespace, and move the device into it
+-Bring up both the loopback interface and the device
+-Connect to wifi network using provided ESSID and password, if applicable
+-Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
+-Spawn shell by default, otherwise exit here
+-Stop dhclient, if running
+-Move the device out of the namespace
+-Delete the namespace
+-Restart NetworkManager (by default)
+
+## calls:
 ```
-
-
-```Script flow:
-
-Set global variables
-Interpret command line arguments
-Confirm root
-If --cleanup option is used, skip below past spawning the shell
-Conditionally check for /etc/$NETNS/resolv.conf (can be overridden)
-Make sure network namespace doesn't already exist, then try to create it
-Bring down the device before moving it
-If it's a virtual or wireless device, detect the corresponding physical device name
-Make the namespace, and move the device into it
-Bring up both the loopback interface and the device
-Connect to wifi network using provided ESSID and password, if applicable
-Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
-Spawn shell by default, otherwise exit here
-Stop dhclient, if running
-Move the device out of the namespace
-Delete the namespace
-Restart NetworkManager (by default)
-```
-
-```Calls:
 sh
 su
 ip
