@@ -35,12 +35,11 @@ OPTIONS:
 --quiet, -q                         Suppress unnecessary output (ignored if --debug flag used)
 --verbose, -r                       (overrides --quiet)
 --debug, -d                         (overrides --quiet and --verbose)
-
+```
 
 Note 1: this script must be run as the superuser.
 
 Note 2: before using this script, you should have a custom resolv.conf file that already exists in the folder /etc/netns/$NETNS, the purpose is to have this file bind to /etc/resolv.conf within the new namespace.  Without this you will have to manually set up DNS (see --force option).
-```
 
 ## examples
 Make a namespace called testspace, move the wifi interface into it, connect to ESSID myWifi with the given password:

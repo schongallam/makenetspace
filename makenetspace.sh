@@ -121,7 +121,7 @@ SET_NOCONFIG=0          # 1 if --noconfig is invoked
 #
 #  DEBUG_LEVEL          Triggers or suppresses output based on debug relevancy. Default depends on
 #                       production vs testing status. (production->MSG_NORM; testing->MSG_VERBOSE)
-DEBUG_LEVEL=$MSG_VERBOSE    #TODO: set to MSG_NORMAL in production release
+DEBUG_LEVEL=$MSG_NORM
 SET_QUIET=0             # 1 if --quiet option is invoked
 SET_VERBOSE=0           # 1 if --verbose option is invoked
 SET_DEBUG=0             # 1 if --debug option is invoked
@@ -192,47 +192,38 @@ usage() {
 
     #TODO: UPDATE WHEN COMPLETE
     echo "usage:"
-    echo "$ makenetspace [-f] NETNS DEVICE [ESSID] [PASSWORD]"
-    echo    
-    echo "Options:"
-    echo " --essid, -e <ESSID>   Attempt to join wireless network ESSID after creating namespace."
-    echo "                      Ignored if using --cleanup."
-    echo " --passwd, -p <PASSWORD>   Password to use with ESSID.  Ignored if --essid not used."
-    echo " --force, -f          Option to force execution without"
-    echo "                      a proper resolv.conf in place."
-    echo "                      Otherwise, script will exit."
-    echo " --help, -h           Show this information"
-    echo
-    echo "Arguments:"
-    echo " NETNS                The name of the namespace you wish"
-    echo "                      to create"
-    echo
-    echo " DEVICE               The network interface that you want"
-    echo "                      to assign to the namespace NETNS"
-    echo
-    echo " ignore: ESSID and PASSWORD   Used for wireless interfaces."
-    echo "                      Attempts to join network with"
-    echo "                      wpa_supplicant only."
-    echo
-    echo "makenetspace will create the namespace NETNS, move the"
-    echo "physical interface DEVICE to that space, attempt to join"
-    echo "the wireless network ESSID using password PASSWORD, then"
-    echo "finally launch a root shell in that namespace."
-    echo
-    echo "when you exit the shell, the script will attempt to kill"
-    echo "dhclient and wpa_supplicant within that namespace,"
-    echo "revert the device to the default namespace, and remove"
-    echo "the namespace."
-    echo
-    echo "Note: this script must be run as the superuser."
-    echo
-    echo "Note: before using this script, you should have a custom"
-    echo "resolv.conf file that already exists in the folder"
-    echo "/etc/netns/$NETNS, the purpose is to have this file bind"
-    echo "to /etc/resolv.conf within the new namespace.  Without"
-    echo "this you'll have to manually set up DNS (see -f option)."
-    echo
+    echo "# makenetspace.sh [OPTIONS] NETNS DEVICE"
 
+    echo " OPTIONS  See included USAGE file for detailed options information."
+    echo " NETNS    The name of the namespace you wish to create"
+    echo " DEVICE   The network interface that you want to assign to the namespace NETNS"
+    echo
+    echo "OPTIONS:"
+    echo "--essid, -e <ESSID>       Connect wifi interface to ESSID"
+    echo "--passwd, -p <PASSWORD>   WPA2 only"
+    echo "--getpw, -g       Get wifi password from STDIN"
+    echo "--force, -f       Proceed even if resolv.conf is not found"
+    echo "--virtual -v      Use iw instead if ip to move the interface around"
+    echo "--noshell, -n     Don't spawn a shell in the new network namespace"
+    echo "--cleanup, -c     Skip setup and configuration, and go straight to cleanup"
+    echo "--strict, -s      Treat all errors as fatal, but try to cleanup before exiting"
+    echo "--strictkill -k   Treat all errors as fatal and exit immediately (no cleanup)"
+    echo "--nmignore, -i    Don't reset NetworkManager upon cleanup"
+    echo "--static <STATIC_IP> <GATEWAY>    Static IP in lieu of dhclient"
+    echo "--noconfig, -o    Don't apply IP configuration with dhclient or --static option"
+    echo "--physical <WIFI> Tto print the physical name of the WIFI interface, then exit"
+    echo "--quiet, -q       Suppress unnecessary output (ignored if --debug flag used)"
+    echo "--verbose, -r     (overrides --quiet)"
+    echo "--debug, -d       (overrides --quiet and --verbose)"
+    echo
+    echo
+    echo "Note 1: this script must be run as the superuser."
+    echo
+    echo "Note 2: before using this script, you should have a custom resolv.conf file"
+    echo "that already exists in the folder /etc/netns/\$NETNS, the purpose is to have"
+    echo "this file bind to /etc/resolv.conf within the new namespace.  Without this you"
+    echo "will have to manually set up DNS (see --force option)."
+    echo
 }
 
 # Process options and positional arguments
