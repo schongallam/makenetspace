@@ -66,7 +66,7 @@ Clean up a namespace with a wired interface:
 
 `# makenetspace.sh --cleanup myConfig eth0`
 
-If a namespace setup attempt with wifi failed due for some reason, you can cleanup with:
+If a namespace setup attempt with wifi failed due to some reason, you can cleanup with:
 
 `# makenetspace.sh --cleanup --virtual testspace phy0`
 
