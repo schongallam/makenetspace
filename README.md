@@ -1,6 +1,6 @@
 # makenetspace
 
-makenetspace is a simple POSIX-compliant script which creates a network namespace, moves a specified interface into it, and spawns a root shell in that namespace.  Changes are reverted upon exiting.  It does basic error checking along the way, and will attempt to ignore certain minor errors.  It recognizes options for IP configuration by dhclient, static assignment, or skipping the configuration step.  It supports ethernet, open wifi, and WPA via wpa_supplicant.
+makenetspace is a simple POSIX-compliant script which creates a network namespace, moves a specified interface into it, and spawns a root shell in that namespace.  Changes are reverted upon exiting.  It does basic error checking along the way, and will attempt to ignore certain minor errors.  It recognizes options for IP configuration by dhclient, static assignment, or skipping the configuration step.  It supports ethernet, open wifi, and WPA2 via wpa_supplicant.
 
 Why might this be useful?  If you have multiple network interfaces on your device, and want a quick and convenient way to set up an environment where you can control which traffic goes through which interface, this script might be for you.  Suppose, for example, that you have two internet connections.  You may want to use browser A for connection 1, and browser B for connection 2.  This script will make it easy for you to do that.
 
@@ -9,15 +9,33 @@ Another example situation would be configuring a network device over a physical 
 This script was created and tested on Linux Mint 20.1.
 
 ## usage:
+See USAGE for more details.
 ```usage:
-
-Briefly, 
 
 # makenetspace.sh [OPTIONS] NETNS DEVICE
 
  OPTIONS        See included USAGE file for detailed options information.
  NETNS          The name of the namespace you wish to create
  DEVICE         The network interface that you want to assign to the namespace NETNS
+
+OPTIONS:
+--essid, -e <ESSID>                 Connect to ESSID
+--passwd, -p <PASSWORD>             Password for ESSID (WPA2 only)
+--getpw, -g                         Get wifi password from STDIN
+--force, -f                         Proceed even it /etc/netns/$NETNS/resolv.conf is not found
+--virtual -v                        Use iw instead if ip to move the interface around
+--noshell, -n                       Don't spawn a shell in the new network namespace
+--cleanup, -c                       Skip setup and configuration, and go straight to cleanup
+--strict, -s                        Treat all errors as fatal, but try to cleanup before exiting
+--strictkill -k                     Treat all errors as fatal and exit immediately (no cleanup)
+--nmignore, -i                      Don't reset NetworkManager upon cleanup
+--static <STATIC_IP> <GATEWAY>
+--noconfig, -o                      Don't apply IP configuration with dhclient or --static option
+--physical <WIFI>                   Try to print the physical name of the WIFI interface, then exit
+--quiet, -q                         Suppress unnecessary output (ignored if --debug flag used)
+--verbose, -r                       (overrides --quiet)
+--debug, -d                         (overrides --quiet and --verbose)
+
 
 Note 1: this script must be run as the superuser.
 
@@ -58,23 +76,23 @@ For the last example, yes, it is counterintuitive to use --virtual and phy0 toge
 
 ## script flow:
 
--Set global variables
--Interpret command line arguments
--Confirm root
--If --cleanup option is used, skip below past spawning the shell
--Conditionally check for /etc/$NETNS/resolv.conf (can be overridden)
--Make sure network namespace doesn't already exist, then try to create it
--Bring down the device before moving it
--If it's a virtual or wireless device, detect the corresponding physical device name
--Make the namespace, and move the device into it
--Bring up both the loopback interface and the device
--Connect to wifi network using provided ESSID and password, if applicable
--Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
--Spawn shell by default, otherwise exit here
--Stop dhclient, if running
--Move the device out of the namespace
--Delete the namespace
--Restart NetworkManager (by default)
+- Set global variables
+- Interpret command line arguments
+- Confirm root
+- If --cleanup option is used, skip below past spawning the shell
+- Conditionally check for /etc/$NETNS/resolv.conf (can be overridden)
+- Make sure network namespace doesn't already exist, then try to create it
+- Bring down the device before moving it
+- If it's a virtual or wireless device, detect the corresponding physical device name
+- Make the namespace, and move the device into it
+- Bring up both the loopback interface and the device
+- Connect to wifi network using provided ESSID and password, if applicable
+- Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
+- Spawn shell by default, otherwise exit here
+- Stop dhclient, if running
+- Move the device out of the namespace
+- Delete the namespace
+- Restart NetworkManager (by default)
 
 ## calls:
 ```
