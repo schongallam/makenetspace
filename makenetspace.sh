@@ -190,10 +190,9 @@ var_dump() {
 # HELP TEXT: (ignore debug level for stdout messages, always print)
 usage() {
 
-    #TODO: UPDATE WHEN COMPLETE
     echo "usage:"
     echo "# makenetspace.sh [OPTIONS] NETNS DEVICE"
-
+    echo
     echo " OPTIONS  See included USAGE file for detailed options information."
     echo " NETNS    The name of the namespace you wish to create"
     echo " DEVICE   The network interface that you want to assign to the namespace NETNS"
@@ -228,10 +227,6 @@ usage() {
 
 # Process options and positional arguments
 get_arguments() {
-
-    # d_echo $MSG_NORM "get_arguments: zero is $0, one is $1" 
-    # d_echo $MSG_NORM "Get options first... count is $#"
-    #not MSG_DEBUG because that option hasnt been set yet
 
     INTERFACE_TYPE=0
 
@@ -622,7 +617,6 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
 
     # Connect to wifi, if required.
-    # TODO: testing of the no-password method, using iwconfig
 
     if [ $STRICT -ne 2 ]; then
 
