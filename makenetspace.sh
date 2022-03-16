@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# makenetspace v 0.2.0-alpha
+# makenetspace v 0.3.0-alpha
 # Copyright 2021, 2022 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
@@ -17,7 +17,7 @@
 # - Set global variables
 # - Interpret command line arguments
 # - Confirm root
-# - (If --cleanup option is used, skip setup and shell)
+# - If --cleanup option is used, skip below past spawning the shell
 # - Conditionally check for /etc/$NETNS/resolv.conf (can be overridden)
 # - Make sure network namespace doesn't already exist, then try to create it
 # - Bring down the device before moving it
@@ -25,10 +25,12 @@
 # - Make the namespace, and move the device into it
 # - Bring up both the loopback interface and the device
 # - Connect to wifi network using provided ESSID and password, if applicable
-# - Start dhclient, unless opted against
-# - At this point, exit, if no shell is desired
-# - (--cleanup option redirects to here)
-# - 
+# - Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
+# - Spawn shell by default, otherwise exit here
+# - Stop dhclient, if running
+# - move the device out of the namespace
+# - delete the namespace
+# - restart NetworkManager (by default)
 
 ### INTERNAL VARIABLES ###
 
@@ -88,13 +90,16 @@ CLEANUP_ONLY=0
 #                       is useful when using --cleanup on a wireless interface
 VIRTUAL=0
 
-#  STRICT               defaults to false (0). If set true, will enforce successful assignment of the
-#                       DEVICE into NETNS and subsequent commands.  Failure of assignment means
-#                       skipping ahead to the cleanup portions of the script.  Set to true (1) by the
-#                       --strict, -s option.
+#  STRICT               value corresponds to status of STRICT operations.  Set to 1 by --strict.
+#                       0 (default) - normal operations (tolerate errors)
+#                       1 - errors cause script to skip ahead to namespace cleanup
+#                       2 - an error was detected, script will skip remaining setup steps.
+#                       Note, will still exit with code 0, reason being the script functioned as intented
+#                       in response to an error.  Can use --debug for more information.
+#                       In future versions, consider carrying through the error code if there is interest.
 STRICT=0
 
-#  STRICTKILL           defaults to false (0). If set true, failure of STRICT enforced commands result
+#  STRICTKILL           defaults to false (0). If set true (1), failure of STRICT enforced commands result
 #                       immediately exiting the script.  This option can cause problems.  Set to true
 #                       (1) by --strictkill, -k
 STRICTKILL=0
@@ -141,8 +146,9 @@ BAD_ARGUMENT=1          # Problem parsing arguments
 NO_ROOT=2               # not run as root
 NO_RESOLV_CONF=3        # unable to find appropriate resolv.conf file
 BAD_NAMESPACE=4         # namespace is bad or already exists
-STRICT_WITH_CLEANUP=5   # could not verify that DEVICE was moved into NETNS.  NETNS removed.
-EXIT_STRICT_KILL=6      # could not verify that DEVICE was moved into NETNS.  Exited immediately.
+BAD_DEVICE=5
+STRICT_WITH_CLEANUP=6   # could not verify that DEVICE was moved into NETNS.  NETNS removed.
+EXIT_STRICT_KILL=7      # could not verify that DEVICE was moved into NETNS.  Exited immediately.
 DEBUG_EXIT=10           # used for debugging purposes
 
 
@@ -454,7 +460,7 @@ fi
 
 # confirm root now, because the subsequent commands will need it
 if [ "$(whoami)" != root ]; then
-  d_echo $MSG_NORM "Only root can run this script. Exiting ($NO_ROOT)" # MSG_FATAL? not necessarily because exit code
+  d_echo $MSG_NORM "Fatal error: only root can run this script. Exiting ($NO_ROOT)" # MSG_FATAL? not necessarily because exit code
   exit $NO_ROOT
 fi
 
@@ -468,9 +474,9 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         d_echo $MSG_VERBOSE "Forcing execution without checking for /etc/netns/$NETNS/resolv.conf"
     else
         if [ -f "/etc/netns/$NETNS/resolv.conf" ]; then
-            d_echo $MSG_VERBOSE "... /etc/netns/$NETNS/resolv.conf exists.  Hopefully it's correct!"
+            d_echo $MSG_VERBOSE "... /etc/netns/$NETNS/resolv.conf exists."
         else
-            d_echo $MSG_NORM "/etc/netns/$NETNS/resolv.conf missing.  Please create this or"
+            d_echo $MSG_NORM "Fatal error: /etc/netns/$NETNS/resolv.conf missing.  Please create this or"
             d_echo $MSG_NORM "run script with the -f option, and expect to set up DNS manually."
             d_echo $MSG_NORM "Exiting ($NO_RESOLV_CONF)"
             exit $NO_RESOLV_CONF
@@ -481,7 +487,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     # check for pre-existing network namespace
     ip netns | grep -w -o $NETNS > /dev/null
     if [ $? -ne 1 ]; then
-        d_echo $MSG_VERBOSE "That namespace won't work.  Please try a different one."
+        d_echo $MSG_VERBOSE "Fatal error: that namespace won't work.  Please try a different one."
         d_echo $MSG_VERBOSE "Check '$ ip netns' to make sure it's not already in use."
         d_echo $MSG_NORM "Exiting ($BAD_NAMESPACE)"
         exit $BAD_NAMESPACE
@@ -491,71 +497,103 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     # create the namespace
     ip netns add "$NETNS"
     if [ $? -ne 0 ]; then
-        d_echo $MSG_NORM "Unable to create namespace $NETNS. Exiting ($BAD_NAMESPACE)"
+        d_echo $MSG_NORM "Fatal error: unable to create namespace $NETNS, exiting ($BAD_NAMESPACE)"
         exit $BAD_NAMESPACE
     fi
 
+    ### After this point, the network namespace has been created, so it will need cleanup according to --strict or --strictkill for any future errors
+
+    # technically, we don't need to lower DEVICE to move it into a namespace.  But if this fails, a common
+    # reason is that DEVICE doesn't exist and we should find this out sooner rather than later.
     d_echo $MSG_DEBUG "Setting $DEVICE down..."
-    # not technically required... or is it?
     ip link set dev "$DEVICE" down
-
-    # Wired or wireless?  If wireless, we need to reference the physical device
-    if [ $VIRTUAL -eq 0 ]; then # wired or physical device
-        d_echo $MSG_DEBUG "...physical device..."
-        ip link set dev "$DEVICE" netns "$NETNS"
-        if [ $? -ne 0 ]; then
-            EXIT_CODE=$?
-            d_echo $MSG_NORM "Unable to move $DEVICE to $NETNS, exiting $EXIT_CODE"
-            exit $EXIT_CODE
-        fi
-    else # wireless or virtual device
-        d_echo $MSG_DEBUG "...virtual or wifi device..."
-        PHY="$(basename "$(cd "/sys/class/net/$DEVICE/phy80211" && pwd -P)")"
-        d_echo $MSG_DEBUG "...attempted to identify PHY = $PHY..."
-        if [ -z $PHY ]; then
-            PHY=$DEVICE # try this as a fallback but it may not work
-            PHY_FALLBACK=1
-            d_echo $MSG_VERBOSE "Unable to confirm physical device name for wireless interface $DEVICE"
-            d_echo $MSG_VERBOSE "Falling back on $PHY, may not work. Proceeding..."
-        fi
-        iw phy "$PHY" set netns name "$NETNS"
-        if [ $? -ne 0 ]; then
-            EXIT_CODE=$?
-            d_echo $MSG_NORM "Unable to move $PHY to $NETNS, exiting $EXIT_CODE"
-            d_echo $MSG_VERBOSE "(Try --virtual option for wifi devices without a given ESSID)"
-            exit $EXIT_CODE
-        fi
-    fi
-
-    # Check for success
-
-    if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
-        echo "Checking for success moving device $DEVICE to netns $NETNS, running ip link show..."
-        ip netns exec $NETNS ip link show | grep $DEVICE # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
-    else
-        ip netns exec $NETNS ip link show | grep $DEVICE > /dev/null # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
-    fi
-    
-    d_echo $MSG_DEBUG "Evaluating strict/kill citeria..."
-    if [ $? -ne 0 ]; then
+    EXIT_CODE=$?
+    d_echo $MSG_DEBUG "ip link set dev $DEVICE down -> $EXIT_CODE"
+    if [ $EXIT_CODE -ne 0 ]; then
         if [ $STRICTKILL -eq 1 ]; then
-            d_echo $MSG_NORM "Unable to confirm $DEVICE in $NETNS, enforcing --strictkill, exiting."
-            exit $EXIT_STRICT_KILL
+            d_echo $MSG_NORM "Unable to set $DEVICE down, enforcing --strictkill"
+            exit $BAD_DEVICE
         fi
         if [ $STRICT -eq 1 ]; then
-            d_echo $MSG_VERBOSE "Unable to confirm $DEVICE in $NETNS, enforcing --strict option and proceeding to cleanup..."
-            STRICT=2 # failure
+            d_echo $MSG_NORM "Unable to set $DEVICE down, enforcing --strict, proceeding to cleanup"
+            STRICT=2 # First location of flagging --strict violation
         else
-            d_echo $MSG_VERBOSE "Unable to confirm $DEVICE in $NETNS, will attempt to continue..."
+            d_echo $MSG_NORM "Unable to set $DEVICE down with code $EXIT_CODE, but will attempt to proceed..."
         fi
-        UNCONFIRMED_MOVE=1
     fi
 
-    # Skip the next steps if STRICT option enforced
+    # From this point on, STRICT could potentially be set to 2, and we need to check between each step.
 
-    d_echo $MSG_DEBUG "Bring up lo..."
+    # Wired or wireless?  If wireless, we need to reference the physical device
+    if [ $STRICT -ne 2 ]; then
+        if [ $VIRTUAL -eq 0 ]; then # wired or physical device
+            d_echo $MSG_DEBUG "...physical device..."
+            ip link set dev "$DEVICE" netns "$NETNS"
+            if [ $? -ne 0 ]; then
+                EXIT_CODE=$?
+                if [ $STRICTKILL -eq 1 ]; then
+                    d_echo $MSG_NORM "Unable to move physical $DEVICE into $NETNS, enforcing --strictkill, exiting $EXIT_CODE"
+                    exit $EXIT_CODE
+                fi
+                d_echo $MSG_NORM "Fatal error: unable to move $DEVICE into $NETNS, proceeding to cleanup..."
+                STRICT=2
+            fi
+        else # wireless or virtual device
+            d_echo $MSG_DEBUG "...virtual or wifi device..."
+            PHY="$(basename "$(cd "/sys/class/net/$DEVICE/phy80211" && pwd -P)")"
+            d_echo $MSG_DEBUG "...attempted to identify PHY = $PHY..."
+            if [ -z $PHY ]; then
+                PHY=$DEVICE # try this as a fallback but it may not work
+                PHY_FALLBACK=1
+                d_echo $MSG_VERBOSE "Unable to confirm physical device name for wireless interface $DEVICE"
+                d_echo $MSG_VERBOSE "Falling back on $PHY, may not work. Proceeding..."
+            fi
+            iw phy "$PHY" set netns name "$NETNS"
+            if [ $? -ne 0 ]; then
+                EXIT_CODE=$?
+                if [ $STRICTKILL -eq 1 ]; then
+                    d_echo $MSG_NORM "Unable to move virtual interface $PHY into $NETNS, enforcing --strictkill, exiting $EXIT_CODE"
+                    exit $EXIT_CODE
+                fi
+                d_echo $MSG_NORM "Fatal error: unable to move $DEVICE into $NETNS, proceeding to cleanup..."
+                STRICT=2
+                d_echo $MSG_VERBOSE "(Try --virtual option to indicate a wifi device without a given ESSID)"
+            fi
+        fi #endif determine wired/wireless/virtual
+
+    fi # endif enforce --strict before attempting to move DEVICE into NETNS
+
+    # From this point forward, failures are not necessarily fatal unless --strict[kill] is enforced
+    if [ $STRICT -ne 2 ]; then
+
+        if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
+            echo "Checking for success moving device $DEVICE to netns $NETNS, running ip link show..."
+            ip netns exec $NETNS ip link show | grep $DEVICE # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
+        else
+            ip netns exec $NETNS ip link show | grep $DEVICE > /dev/null # WARNING: may yield false positive result for success if DEVICE is abnormally too simple of a string
+        fi
+        
+        EXIT_CODE=$?
+
+        d_echo $MSG_DEBUG "Evaluating strict/kill citeria for having moved $DEVICE into $NETNS..."
+        if [ $EXIT_CODE -ne 0 ]; then
+            if [ $STRICTKILL -eq 1 ]; then
+                d_echo $MSG_NORM "Unable to confirm $DEVICE in $NETNS, enforcing --strictkill, exiting."
+                exit $EXIT_STRICT_KILL
+            fi
+            if [ $STRICT -eq 1 ]; then
+                d_echo $MSG_VERBOSE "Unable to confirm $DEVICE in $NETNS, enforcing --strict, proceeding to cleanup..."
+                STRICT=2
+            else
+                d_echo $MSG_VERBOSE "Unable to confirm $DEVICE in $NETNS, will attempt to continue..."
+            fi
+            UNCONFIRMED_MOVE=1
+        fi
+    fi # endif enforcing --strict before checking for success moving DEVICE into NETNS
+
     # Bring up lo and $DEVICE
     if [ $STRICT -ne 2 ]; then
+        d_echo $MSG_DEBUG "Bring up lo..."
         ip netns exec "$NETNS" ip link set dev lo up
         if [ $? -ne 0 ]; then
             if [ $STRICTKILL -eq 1 ]; then
@@ -571,10 +609,10 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             fi
         fi
         LO_FAIL=1
-    fi
+    fi # endif bring up lo
 
-    d_echo $MSG_DEBUG "Bring up $DEVICE..."
     if [ $STRICT -ne 2 ]; then
+        d_echo $MSG_DEBUG "Bring up $DEVICE..."
         ip netns exec "$NETNS" ip link set dev "$DEVICE" up
         if [ $? -ne 0 ]; then
             if [ $STRICTKILL -eq 1 ]; then
@@ -589,19 +627,19 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             fi
         fi
         DEVICE_FAIL=1
-    fi
+    fi #endif bring up DEVICE
 
 
     # Connect to wifi, if required.
     # TODO: testing of the no-password method, using iwconfig
 
-    d_echo $MSG_DEBUG "Will connect to Wifi if required..."
-
     if [ $STRICT -ne 2 ]; then
-    
-        #dirty hack to ensure the exit status variable ($?) is reset to zero
-        #someone please educate me if there is a better way to do this
-        cat /dev/null
+
+        # This d_echo call serves double duty.  Besides conditionally displaying a message, it also
+        # resets $? to 0.  If you remove it later, do something empty like `cat /dev/null` to reset $?.
+        d_echo $MSG_DEBUG "Will connect to Wifi if required..."
+        #cat /dev/null
+
         if [ $? -ne 0 ]; then
             d_echo $MSG_FATAL "Should never encounter this, exiting."
             exit $DEBUG_EXIT
@@ -634,14 +672,12 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             ip netns exec "$NETNS" iwconfig
         fi
 
-    fi
+    fi #endif connect to wifi
 
-    # TODO: enable timeout limits or other failover parameters for dhclient call
+    # TODO: consider enabling timeout limits or other failover parameters for dhclient call
 
-    d_echo $MSG_DEBUG "Configuring IP with either dhclient or ip command..."
-    
     if [ $STRICT -ne 2 ]; then
-
+        d_echo $MSG_DEBUG "IP configuring step (unless --noconfig)"
         # intentional blank line
         d_echo $MSG_NORM ""
 
@@ -652,25 +688,56 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             d_echo $MSG_DEBUG "dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
         elif [ $MANUAL_IP_CONFIG -eq 1 ]; then
             d_echo $MSG_NORM "Attempting to manually configure STATIC_IP and GATEWAY.  Exit status verification not implemented yet."
-            ip netns exec "$NETNS" ip addr add "$STATIC_IP" dev "$DEVICE" #https://www.tecmint.com/ip-command-examples/
-            #ip netns exec "$NETNS" ip address add dev "$DEVICE" local "$STATIC_IP" #https://linux.die.net/man/8/ip
+            ip netns exec "$NETNS" ip addr add "$STATIC_IP" brd + dev "$DEVICE" #https://www.tecmint.com/ip-command-examples/
+            EXIT_CODE=$?
+            d_echo $MSG_DEBUG "ip addr add: returns $EXIT_CODE..."
+            if [ $EXIT_CODE -ne 0 ]; then
+                if [ $STRICTKILL -eq 1 ]; then
+                    d_echo $MSG_NORM "Could not add static IP and netmask, enforcing --strictkill, exiting."
+                    exit $EXIT_STRICT_KILL
+                fi        
+                if [ $STRICT -eq 1 ]; then
+                    d_echo $MSG_NORM "Could not add static IP and netmask, enforcing --strict option and proceeding to cleanup..."
+                    STRICT=2
+                else
+                    d_echo $MSG_VERBOSE "...Could not add static IP and netmask..."
+                fi
+            fi
+
+
             ip netns exec "$NETNS" ip route add default via "$GATEWAY"
+            EXIT_CODE=$?            
+            d_echo $MSG_DEBUG "ip route add: returns $EXIT_CODE..."
+            if [ $EXIT_CODE -ne 0 ]; then
+                if [ $STRICTKILL -eq 1 ]; then
+                    d_echo $MSG_NORM "Could not add default gateway, enforcing --strictkill, exiting."
+                    exit $EXIT_STRICT_KILL
+                fi        
+                if [ $STRICT -eq 1 ]; then
+                    d_echo $MSG_NORM "Could not add default gateway, enforcing --strict option and proceeding to cleanup..."
+                    STRICT=2
+                else
+                    d_echo $MSG_VERBOSE "...Could not add default gateway..."
+                fi
+            fi
         else
             d_echo $MSG_NORM "No IP host configuration set up.  Do not expect usual network access until you address this."
+        fi #endif configure IP
+
+        if [ $STRICT -ne 2 ]; then # if STRICT is enforced, script should cleanup instead of shelling or terminating here
+            if [ $SPAWN_SHELL -eq 0 ]; then # we are done
+                exit $NORMAL
+            fi
+ 
+            # Spawn a shell in the new namespace
+            d_echo $MSG_NORM "Spawning root shell in $NETNS..."
+            d_echo $MSG_VERBOSE "... try runuser -u UserName BrowserName &"
+            d_echo $MSG_VERBOSE "... and exit to kill the shell and netns, when done"
+            ip netns exec "$NETNS" sh
         fi
 
-        if [ $SPAWN_SHELL -eq 0 ]; then # we are done
-            exit $NORMAL
-        fi
-
-        # Spawn a shell in the new namespace
-        d_echo $MSG_NORM "Spawning root shell in $NETNS..."
-        d_echo $MSG_VERBOSE "... try runuser -u UserName BrowserName &"
-        d_echo $MSG_VERBOSE "... and exit to kill the shell and netns, when done"
-        ip netns exec "$NETNS" su
-
-    fi
-    # end of setup and shell. Only cleanup remains.
+ 
+    fi # endif of namespace setup and shell. Only cleanup remains.
 
 else # --cleanup option enabled.  Still may need to set $PHY
     d_echo $MSG_NORM "Cleanup only"
@@ -684,12 +751,13 @@ else # --cleanup option enabled.  Still may need to set $PHY
             d_echo $MSG_VERBOSE "Falling back on $PHY, may not work. Proceeding..."
         fi
     fi
-fi
+fi # endif determining cleanup only or not
+
+
+### Cleanup phase ###
 
 # Stop dhclient
-# TODO: figure out how this is affected, if using --static option
-# In the meantime, just stop dhclient regardless and ignore any manually set IP config
-# which should go away when we kill the namespace anyway... right?
+# likely no effect if we employed --static, but the user may have started it separately so kill it just in case
 ip netns exec "$NETNS" dhclient -r
 d_echo $MSG_NORM "Stopped dhclient in $NETNS with status $?"
 

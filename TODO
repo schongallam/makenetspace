@@ -1,11 +1,11 @@
-NEXT: Test functionality of static IP configuration for ethernet
+NEXT: update readme and usage()
 
-add an option which shows the physical device name for a virtual device
-add DEVICE verification
+move Debug echos to within the strict checking ifs
 assess input verification needs
-update readme
-update usage subroutine text
 
+DONE:
+tested static IP configuration for ethernet - 2022-03-15
+added an option which shows the physical device name for a virtual device - 2022-03-15
 tested static IP configuration for wifi - 2022-03-14
 tested general use on wifi and ethernet devices, with dhclient usage - 2022-03-14
 tested option parsing, added get wifi password from stdin - 2022-03-12
