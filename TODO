@@ -1,6 +1,17 @@
-implement getotps for command line arguments
-add an option to exit the script at the point it would normally spawn the shell
-add an option to clean up an existing netns
-add DEVICE verification
-add option to determine if network-manager service will be reset before exiting
+NEXT: update readme and usage()
+
+move Debug echos to within the strict checking ifs
 assess input verification needs
+
+DONE:
+tested static IP configuration for ethernet - 2022-03-15
+added an option which shows the physical device name for a virtual device - 2022-03-15
+tested static IP configuration for wifi - 2022-03-14
+tested general use on wifi and ethernet devices, with dhclient usage - 2022-03-14
+tested option parsing, added get wifi password from stdin - 2022-03-12
+implement advanced parsing for command line arguments - done 2022-03-09
+add an option to exit the script at the point it would normally spawn the shell - done 2022-03-09
+add an option to clean up an existing netns - done 2022-03-09
+add option to determine if network-manager service will be reset before exiting - done 2022-03-09
+add the ability to join an open wifi network (i.e. no wpa_supplicant) - done 2022-03-09
+add an option to control DHCP client usage vs. ip command static setup vs. something else - done 2022-03-09
