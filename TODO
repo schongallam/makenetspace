@@ -1,9 +1,10 @@
-NEXT: update readme and usage()
+NEXT: check for network-manager before restarting it
 
 move Debug echos to within the strict checking ifs
 assess input verification needs
 
 DONE:
+update readme and usage() - v0.3.0 alpha
 tested static IP configuration for ethernet - 2022-03-15
 added an option which shows the physical device name for a virtual device - 2022-03-15
 tested static IP configuration for wifi - 2022-03-14

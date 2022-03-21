@@ -765,10 +765,20 @@ d_echo $MSG_NORM "Deleted $NETNS"
 
 # ... and just for good measure
 if [ $NMIGNORE -eq 0 ]; then
-    d_echo $MSG_NORM "Restarting Network Manager"
-    service network-manager restart
+    #make sure network-manager is running first
+    service network-manager status > /dev/null
+    $TEMP_EXIT=$?
+    if [ $TEMP_EXIT -eq 0 ]; then
+        d_echo $MSG_NORM "Restarting network-manager"
+        service network-manager restart
+#    elseif [ $TEMP_EXIT -eq 3 ]; then
+#        d_echo $MSG_NORM "Starting network-manager"
+#        service network-manager start
+    else
+        d_echo $MSG_VERBOSE "Network-manager not running, skipping restart"
+    fi
 else
-    d_echo $MSG_NORM "Ignoring Network Manager reset"
+    d_echo $MSG_NORM "Ignoring network-manager reset"
 fi
 
 d_echo $MSG_VERBOSE ""
