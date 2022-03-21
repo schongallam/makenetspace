@@ -251,12 +251,15 @@ get_arguments() {
                     exit $BAD_ARGUMENT
                 fi
                 WIFI_PASSWORD=$2
+                if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then # make sure the variable is only increased once
+                    INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
+                fi
                 SET_PWD=1 # used for explicit parameter auditing and warning if --getpw is also used
                 shift
                 shift
                 ;;
             --getpw|-g)
-                if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then
+                if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then # make sure the variable is only increased once
                     INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
                 fi
                 GET_PWD=1
@@ -624,6 +627,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         # resets $? to 0.  If you remove it later, do something empty like `cat /dev/null` to reset $?.
         d_echo $MSG_DEBUG "Will connect to Wifi if required..."
         #cat /dev/null
+        #TEMP_EXIT=0
 
         if [ $? -ne 0 ]; then
             d_echo $MSG_FATAL "Should never encounter this, exiting."
@@ -634,12 +638,16 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         if [ $INTERFACE_TYPE -eq 1 ]; then
             d_echo $MSG_NORM "Attempting to connect to open wifi network $ESSID..."
             ip netns exec "$NETNS" iwconfig "$DEVICE" essid "$ESSID"
+            TEMP_EXIT=$?
         elif [ $INTERFACE_TYPE -eq 3 ]; then
             d_echo $MSG_NORM "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
             wpa_passphrase $ESSID $PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
+            TEMP_EXIT=$?
+            d_echo $MSG_DEBUG "wpa_supplicant exits with code $TEMP_EXIT"
         fi
 
-        if [ $? -ne 0 ]; then
+        # check strict options after attempting to join wifi network
+        if [ $TEMP_EXIT -ne 0 ]; then
             if [ $STRICTKILL -eq 1 ]; then
                 d_echo $MSG_NORM "Error $? attempting to join $ESSID, enforcing --strictkill, exiting."
                 exit $EXIT_STRICT_KILL
@@ -767,7 +775,7 @@ d_echo $MSG_NORM "Deleted $NETNS"
 if [ $NMIGNORE -eq 0 ]; then
     #make sure network-manager is running first
     service network-manager status > /dev/null
-    $TEMP_EXIT=$?
+    TEMP_EXIT=$?
     if [ $TEMP_EXIT -eq 0 ]; then
         d_echo $MSG_NORM "Restarting network-manager"
         service network-manager restart

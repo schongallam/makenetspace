@@ -1,4 +1,5 @@
 NEXT: test the check for network-manager before restarting it
+ALSO: re-work wpa_passphrase and wpa_supplicant lines
 
 move Debug echos to within the strict checking ifs
 assess input verification needs
