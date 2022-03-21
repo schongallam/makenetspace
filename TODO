@@ -1,4 +1,4 @@
-NEXT: check for network-manager before restarting it
+NEXT: test the check for network-manager before restarting it
 
 move Debug echos to within the strict checking ifs
 assess input verification needs
