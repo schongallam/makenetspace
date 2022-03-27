@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# makenetspace v 0.3.0-alpha
+# makenetspace v 0.3.0-beta
 # Copyright 2021, 2022 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
@@ -231,7 +231,6 @@ get_arguments() {
     INTERFACE_TYPE=0
 
     while [ $# -gt 0 ]; do
-        d_echo $MSG_DEBUG " testing $1..."
         case $1 in
             --essid|-e)
                 if [ $# -lt 2 ]; then
@@ -251,12 +250,15 @@ get_arguments() {
                     exit $BAD_ARGUMENT
                 fi
                 WIFI_PASSWORD=$2
+                if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then # make sure the variable is only increased once
+                    INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
+                fi
                 SET_PWD=1 # used for explicit parameter auditing and warning if --getpw is also used
                 shift
                 shift
                 ;;
             --getpw|-g)
-                if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then
+                if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then # make sure the variable is only increased once
                     INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
                 fi
                 GET_PWD=1
@@ -521,7 +523,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                     d_echo $MSG_NORM "Unable to move physical $DEVICE into $NETNS, enforcing --strictkill, exiting $EXIT_CODE"
                     exit $EXIT_CODE
                 fi
-                d_echo $MSG_NORM "Fatal error: unable to move $DEVICE into $NETNS, proceeding to cleanup..."
+                d_echo $MSG_NORM "Fatal error: unable to move $DEVICE into $NETNS, proceeding to cleanup... (try --virtual for wifi interfaces)"
                 STRICT=2
             fi
         else # wireless or virtual device
@@ -560,8 +562,6 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         fi
         
         EXIT_CODE=$?
-
-        d_echo $MSG_DEBUG "Evaluating strict/kill citeria for having moved $DEVICE into $NETNS..."
         if [ $EXIT_CODE -ne 0 ]; then
             if [ $STRICTKILL -eq 1 ]; then
                 d_echo $MSG_NORM "Unable to confirm $DEVICE in $NETNS, enforcing --strictkill, exiting."
@@ -620,26 +620,24 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
     if [ $STRICT -ne 2 ]; then
 
-        # This d_echo call serves double duty.  Besides conditionally displaying a message, it also
-        # resets $? to 0.  If you remove it later, do something empty like `cat /dev/null` to reset $?.
-        d_echo $MSG_DEBUG "Will connect to Wifi if required..."
-        #cat /dev/null
-
-        if [ $? -ne 0 ]; then
-            d_echo $MSG_FATAL "Should never encounter this, exiting."
-            exit $DEBUG_EXIT
-        fi
+        TEMP_EXIT=0
 
         # connect to open network with iwconfig, or, with WPA supplicant if password is provided
         if [ $INTERFACE_TYPE -eq 1 ]; then
             d_echo $MSG_NORM "Attempting to connect to open wifi network $ESSID..."
             ip netns exec "$NETNS" iwconfig "$DEVICE" essid "$ESSID"
+            TEMP_EXIT=$?
         elif [ $INTERFACE_TYPE -eq 3 ]; then
             d_echo $MSG_NORM "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
-            wpa_passphrase $ESSID $PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
+            wpa_passphrase $ESSID $WIFI_PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
+            #alternate way:
+            #ip netns exec "$NETNS" wpa_supplicant -B -i "$DEVICE" -c <(wpa_passphrase $ESSID $WIFI_PASSWORD)
+            TEMP_EXIT=$?
+            d_echo $MSG_DEBUG "wpa_supplicant exits with code $TEMP_EXIT"
         fi
 
-        if [ $? -ne 0 ]; then
+        # check strict options after attempting to join wifi network
+        if [ $TEMP_EXIT -ne 0 ]; then #TODO FIX AND FINE ERROR 
             if [ $STRICTKILL -eq 1 ]; then
                 d_echo $MSG_NORM "Error $? attempting to join $ESSID, enforcing --strictkill, exiting."
                 exit $EXIT_STRICT_KILL
@@ -652,14 +650,14 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             fi
         fi
 
-        d_echo $MSG_DEBUG "Displaying output of iwconfig in namespace $NETNS:"
         if [ $DEBUG_LEVEL -ge $MSG_DEBUG ]; then
+            ### This is can futile if wpa_supplicant needs more time to connect, so delay.
+            echo "Displaying output of iwconfig in namespace $NETNS (slight pause here for device latency):"
+            sleep 5
             ip netns exec "$NETNS" iwconfig
         fi
 
     fi #endif connect to wifi
-
-    # TODO: consider enabling timeout limits or other failover parameters for dhclient call
 
     if [ $STRICT -ne 2 ]; then
         d_echo $MSG_DEBUG "IP configuring step (unless --noconfig)"
@@ -668,12 +666,13 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
         # start dhclient, or, assign given STATIC_IP and GATEWAY, or, do nothing
         if [ $MANUAL_IP_CONFIG -eq 0 ]; then
+            # dhclient can take a long time to try to connect, depending on your timeout setting in /etc/dhcp/dhclient.conf
             d_echo $MSG_NORM "Starting dhclient..."
             ip netns exec "$NETNS" dhclient "$DEVICE"
             d_echo $MSG_DEBUG "dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
         elif [ $MANUAL_IP_CONFIG -eq 1 ]; then
-            d_echo $MSG_NORM "Attempting to manually configure STATIC_IP and GATEWAY.  Exit status verification not implemented yet."
-            ip netns exec "$NETNS" ip addr add "$STATIC_IP" brd + dev "$DEVICE" #https://www.tecmint.com/ip-command-examples/
+            d_echo $MSG_NORM "Attempting to manually configure STATIC_IP and GATEWAY..."
+            ip netns exec "$NETNS" ip addr add "$STATIC_IP" brd + dev "$DEVICE"
             EXIT_CODE=$?
             d_echo $MSG_DEBUG "ip addr add: returns $EXIT_CODE..."
             if [ $EXIT_CODE -ne 0 ]; then
@@ -718,7 +717,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
             d_echo $MSG_NORM "Spawning root shell in $NETNS..."
             d_echo $MSG_VERBOSE "... try runuser -u UserName BrowserName &"
             d_echo $MSG_VERBOSE "... and exit to kill the shell and netns, when done"
-            ip netns exec "$NETNS" sh
+            ip netns exec "$NETNS" su
         fi
 
  
@@ -743,14 +742,23 @@ fi # endif determining cleanup only or not
 
 # Stop dhclient
 # likely no effect if we employed --static, but the user may have started it separately so kill it just in case
+d_echo $MSG_VERBOSE "Stopping dhclient..."
 ip netns exec "$NETNS" dhclient -r
 d_echo $MSG_NORM "Stopped dhclient in $NETNS with status $?"
 
+# Not always necessary, but might be beneficial under some circumstances?
+d_echo $MSG_VERBOSE "Killing wpa_supplicant..."
+ip netns exec "$NETNS" killall wpa_supplicant
+d_echo $MSG_NORM "Killed wpa_supplicant in $NETNS with status $?"
+
 # Move the device back into the default namespace
+d_echo $MSG_VERBOSE "Moving $DEVICE out of netns $NETNS..."
 if [ $VIRTUAL -eq 0 ]; then
+    d_echo $MSG_VERBOSE "Moving device $DEVICE out of netns $NETNS..."
     ip netns exec "$NETNS" ip link set dev "$DEVICE" netns 1
     d_echo $MSG_NORM "Closing wired interface status $?.  If this fails, try again with --virtual"
 else
+    d_echo $MSG_VERBOSE "Moving device $PHY (wireless/virtual) out of netns $NETNS..."
     ip netns exec "$NETNS" iw phy "$PHY" set netns 1
     TEMP_EXIT=$?
     d_echo $MSG_NORM "Closing wireless/virtual interface status $TEMP_EXIT"
@@ -760,15 +768,25 @@ else
 fi
 
 # Remove the namespace
+d_echo $MSG_VERBOSE "Deleting $NETNS..."
 ip netns del "$NETNS"
-d_echo $MSG_NORM "Deleted $NETNS"
 
 # ... and just for good measure
 if [ $NMIGNORE -eq 0 ]; then
-    d_echo $MSG_NORM "Restarting Network Manager"
-    service network-manager restart
+    #make sure network-manager is running first
+    service network-manager status > /dev/null
+    TEMP_EXIT=$?
+    if [ $TEMP_EXIT -eq 0 ]; then
+        d_echo $MSG_VERBOSE "Restarting network-manager..."
+        service network-manager restart
+#    elseif [ $TEMP_EXIT -eq 3 ]; then
+#        d_echo $MSG_NORM "Starting network-manager"
+#        service network-manager start
+    else
+        d_echo $MSG_VERBOSE "Network-manager not running, skipping restart"
+    fi
 else
-    d_echo $MSG_NORM "Ignoring Network Manager reset"
+    d_echo $MSG_VERBOSE "Ignoring network-manager reset"
 fi
 
 d_echo $MSG_VERBOSE ""
@@ -781,7 +799,7 @@ d_echo $MSG_VERBOSE "exiting, status $?"
 #
 #
 # LICENSE
-# Copyright 2021, by Malcolm Schongalla
+# Copyright 2021,2022 by Malcolm Schongalla
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 #
