@@ -764,8 +764,10 @@ d_echo $MSG_VERBOSE "exiting, status $?"
 
 # RESCUE:
 # if script fails and deletes the namespace without first removing the interface from the netns, try:
-# sudo find /proc/ -name wlp7s0 # or interface name as appropriate
-# sudo kill [process_id]
+# $ sudo find /proc/ -name wlp7s0 # or interface name as appropriate, locate the process_id
+# $ sudo kill [process_id]
+#
+# (and if all else fails, try restarting your system)
 #
 #
 # LICENSE
