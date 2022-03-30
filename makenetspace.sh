@@ -30,7 +30,6 @@
 # - Stop dhclient, if running
 # - move the device out of the namespace
 # - delete the namespace
-# - restart NetworkManager (by default)
 
 ### INTERNAL VARIABLES ###
 
