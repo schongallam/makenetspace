@@ -1,10 +1,10 @@
-NEXT: test the check for network-manager before restarting it
-IMPORTANT: Figure out why running the script makes network-manager gray out the "disconnect" option in gui
+NEXT: Test to version 1.0.0 release
 
 LATER:
 assess input verification needs
 
 DONE:
+Remove the restart of network manager, and related command line options (2022-03-29, ver 0.3.1beta)
 fixed wpa_passphrase and wpa_supplicant lines
 move Debug echos to within the strict checking ifs
 update readme and usage() - v0.3.0 alpha
