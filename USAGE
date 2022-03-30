@@ -40,8 +40,6 @@ OPTIONS:
 --strictkill -k     Like --strict, but exits immediately (no cleanup).  Takes precedence
                     over regular --strict.  Ignored if using --cleanup option.
 
---nmignore, -i      Don't reset network-manager on cleanup (ignore it).
-
 --static <STATIC_IP> <GATEWAY>     Instead of running dhclient (default), uses ip(8) to add a
                     static ip address and default route.  IPv4 only at this time.
                     Incompatible with --noconfig option.

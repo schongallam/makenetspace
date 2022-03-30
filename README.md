@@ -28,7 +28,6 @@ OPTIONS:
 --cleanup, -c                       Skip setup and configuration, and go straight to cleanup
 --strict, -s                        Treat all errors as fatal, but try to cleanup before exiting
 --strictkill -k                     Treat all errors as fatal and exit immediately (no cleanup)
---nmignore, -i                      Don't reset NetworkManager upon cleanup
 --static <STATIC_IP> <GATEWAY>
 --noconfig, -o                      Don't apply IP configuration with dhclient or --static option
 --physical <WIFI>                   Try to print the physical name of the WIFI interface, then exit
@@ -91,7 +90,6 @@ For the last example, yes, it is counterintuitive to use --virtual and phy0 toge
 - Stop dhclient, if running
 - Move the device out of the namespace
 - Delete the namespace
-- Restart NetworkManager (by default)
 
 ## calls:
 ```

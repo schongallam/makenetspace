@@ -104,10 +104,6 @@ STRICT=0
 #                       (1) by --strictkill, -k
 STRICTKILL=0
 
-#  NMIGNORE             defaults to false (0). If set true, don't reset network manager on cleanup.
-#                       set to true (1) by --nmignore, -i
-NMIGNORE=0
-
 #  MANUAL_IP_CONFIG     defaults to 0.  Set to 1 by --static option, which collects STATIC_IP and
 #                       GATEWAY.  Set to 2 by --noconfig, -o option, to indicate skipping host
 #                       IP configuration entirely.
@@ -173,7 +169,6 @@ var_dump() {
     echo "VIRTUAL = $VIRTUAL"
     echo "STRICT = $STRICT"
     echo "STRICTKILL = $STRICTKILL"
-    echo "NMIGNORE = $NMIGNORE"
     echo "MANUAL_IP_CONFIG = $MANUAL_IP_CONFIG"
     echo "SET_STATIC = $SET_STATIC"
     echo "STATIC_IP = $STATIC_IP"
@@ -207,10 +202,9 @@ usage() {
     echo "--cleanup, -c     Skip setup and configuration, and go straight to cleanup"
     echo "--strict, -s      Treat all errors as fatal, but try to cleanup before exiting"
     echo "--strictkill -k   Treat all errors as fatal and exit immediately (no cleanup)"
-    echo "--nmignore, -i    Don't reset NetworkManager upon cleanup"
     echo "--static <STATIC_IP> <GATEWAY>    Static IP in lieu of dhclient"
     echo "--noconfig, -o    Don't apply IP configuration with dhclient or --static option"
-    echo "--physical <WIFI> Tto print the physical name of the WIFI interface, then exit"
+    echo "--physical <WIFI> Print the physical name of the WIFI interface, then exit"
     echo "--quiet, -q       Suppress unnecessary output (ignored if --debug flag used)"
     echo "--verbose, -r     (overrides --quiet)"
     echo "--debug, -d       (overrides --quiet and --verbose)"
@@ -304,10 +298,6 @@ get_arguments() {
                 ;;
             --strictkill|-k)
                 STRICTKILL=1
-                shift
-                ;;
-            --nmignore|-i)
-                NMIGNORE=1
                 shift
                 ;;
             --physical)
@@ -770,25 +760,6 @@ fi
 # Remove the namespace
 d_echo $MSG_VERBOSE "Deleting $NETNS..."
 ip netns del "$NETNS"
-
-# ... and just for good measure
-if [ $NMIGNORE -eq 0 ]; then
-    #make sure network-manager is running first
-    service network-manager status > /dev/null
-    TEMP_EXIT=$?
-    if [ $TEMP_EXIT -eq 0 ]; then
-        d_echo $MSG_VERBOSE "Restarting network-manager..."
-        service network-manager restart
-#    elseif [ $TEMP_EXIT -eq 3 ]; then
-#        d_echo $MSG_NORM "Starting network-manager"
-#        service network-manager start
-    else
-        d_echo $MSG_VERBOSE "Network-manager not running, skipping restart"
-    fi
-else
-    d_echo $MSG_VERBOSE "Ignoring network-manager reset"
-fi
-
 d_echo $MSG_VERBOSE ""
 d_echo $MSG_VERBOSE "exiting, status $?"
 
