@@ -106,7 +106,7 @@ For the last example, yes, it is counterintuitive to use --virtual and phy0 toge
 0.3.0 beta
 0.3.0 alpha
 
-## dependencies:
+## dependencies
 ### utility (package):
 ```
 sh (dash_)

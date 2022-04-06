@@ -1,4 +1,8 @@
-NEXT: Test to version 1.0.0 release
+NEXT:
+Update usage() regarding --quiet, --debug, --verbose wording
+Add a parameter to allow running a different command than sh
+Test to version 1.0.0 release
+
 
 LATER:
 assess input verification needs
