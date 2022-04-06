@@ -40,6 +40,15 @@ Note 1: this script must be run as the superuser.
 
 Note 2: before using this script, you should have a custom resolv.conf file that already exists in the folder /etc/netns/$NETNS, the purpose is to have this file bind to /etc/resolv.conf within the new namespace.  Without this you will have to manually set up DNS (see --force option).
 
+## tips
+RESCUE:
+if script fails and deletes the namespace without first removing the interface from the netns, it might appear "gone."  You can try:
+```
+$ sudo find /proc/ -name wlp7s0 # or interface name as appropriate
+$ sudo kill [process_id]
+```
+and the interface should re-appear.  If all else fails, restarting your system should restore everything.
+
 ## examples
 Make a namespace called testspace, move the wifi interface into it, connect to ESSID myWifi with the given password:
 
@@ -91,15 +100,15 @@ For the last example, yes, it is counterintuitive to use --virtual and phy0 toge
 - Move the device out of the namespace
 - Delete the namespace
 
-## calls:
+## dependencies:
+### utility (package):
 ```
-sh
-su
-ip
-iw
-iwconfig
-wpa_passphrase
-wpa_supplicant
-dhclient
-service network-manager
+sh (dash_)
+su (util-linux)
+ip (iproute2)
+iw (iw)
+iwconfig (wireless-tools)
+wpa_passphrase (wpasupplicant)
+wpa_supplicant (wpasupplicant)
+dhclient (isc-dhcp-client)
 ```
