@@ -103,7 +103,9 @@ For the last example, yes, it is counterintuitive to use --virtual and phy0 toge
 ## releases
 
 0.3.1 beta
+
 0.3.0 beta
+
 0.3.0 alpha
 
 ## dependencies
