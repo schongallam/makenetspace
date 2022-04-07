@@ -1,6 +1,8 @@
 NEXT:
 Update usage() regarding --quiet, --debug, --verbose wording
+Update usage() to use cat << EOF
 Add a parameter to allow running a different command than sh
+Add a --bssid parameter to connect to a BSSID
 Test to version 1.0.0 release
 
 
