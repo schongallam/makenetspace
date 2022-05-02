@@ -7,9 +7,10 @@ Consider it a "TODO" list.
 
 OPTIONS:
 --essid, -e <ESSID> Attempt to join wireless network ESSID after creating namespace.
-                    Ignored if using --cleanup.
+                    Ignored if using --cleanup.  Use quotes if it contains blank spaces.
 
 --passwd, -p <PASSWORD>   Password to use with ESSID.  Ignored if --essid not used.
+                    Use quotes if it contains blank spaces.
 
 --getpw, -g         Gets PASSWORD from stdin instead of command line. Overrides --passwd.
 
@@ -22,6 +23,9 @@ OPTIONS:
 --noshell, -n       Exit the script instead of spawning a root shell in the new namespace.
                     use with --cleanup later to close the namespace.  Incompatible
                     with --cleanup.
+
+--execute, -x <CMD>     Instead of running su, script will run CMD. Use quotes if it
+                    contains blank spaces.
 
 --cleanup, -c       Resumes execution as if the su shell was just exited.  This option
                     only attempts to remove the specified DEVICE, so if you manually

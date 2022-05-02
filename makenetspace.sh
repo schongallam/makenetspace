@@ -1,16 +1,16 @@
 #!/bin/sh
 #
-# makenetspace v 0.3.0-beta
+# makenetspace v 0.3.2-beta
 # Copyright 2021, 2022 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
 #
 # A script to set up a network namespace and move an adapter into it, and clean up after
 # 
-# usage:
+# general usage:
 # $ makenetspace [OPTIONS] NETNS DEVICE
 #
-# see USAGE for argument details.
+# see USAGE file or usage() below for argument details.
 #
 #
 # Script flow:
@@ -26,7 +26,7 @@
 # - Bring up both the loopback interface and the device
 # - Connect to wifi network using provided ESSID and password, if applicable
 # - Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
-# - Spawn shell by default, otherwise exit here
+# - Spawn shell by default, execute another specified command, or exit here
 # - Stop dhclient, if running
 # - move the device out of the namespace
 # - delete the namespace
@@ -80,6 +80,12 @@ GET_PWD=0
 #  SPAWN_SHELL          defaults to true (1).  False with --noshell, -n option
 SPAWN_SHELL=1
 
+#  EXEC_FLAG            1 if intention is to execute an alternate command to su.  Incomaptible with
+#                       --cleanup
+EXEC_FLAG=0
+
+#  EXEC_CMD             If EXEC_FLAG is set to 1, run this command instead of su.
+#
 #  CLEANUP_ONLY         defaults to false (0). To cleanup a wireless interface, use this with --virtual
 #                       or --essid <ESSID>.  Incompatible with --noshell, -n
 CLEANUP_ONLY=0
@@ -146,8 +152,9 @@ STRICT_WITH_CLEANUP=6   # could not verify that DEVICE was moved into NETNS.  NE
 EXIT_STRICT_KILL=7      # could not verify that DEVICE was moved into NETNS.  Exited immediately.
 DEBUG_EXIT=10           # used for debugging purposes
 
-
+#
 ### SUBROUTINES ###
+#
 
 # Printing to stdout based on DEBUG_LEVEL
 d_echo() {
@@ -164,6 +171,8 @@ var_dump() {
     echo "GET_PWD = $GET_PWD"
     echo "WIFI_PASSWORD = $WIFI_PASSWORD"
     echo "SPAWN_SHELL = $SPAWN_SHELL"
+    echo "EXEC_FLAG = $EXEC_FLAG"
+    echo "EXEC_CMD = $EXEC_CMD"
     echo "CLEANUP_ONLY = $CLEANUP_ONLY"
     echo "VIRTUAL = $VIRTUAL"
     echo "STRICT = $STRICT"
@@ -183,39 +192,41 @@ var_dump() {
 
 # HELP TEXT: (ignore debug level for stdout messages, always print)
 usage() {
+    cat <<EOF
+usage:
+# makenetspace.sh [OPTIONS] NETNS DEVICE
 
-    echo "usage:"
-    echo "# makenetspace.sh [OPTIONS] NETNS DEVICE"
-    echo
-    echo " OPTIONS  See included USAGE file for detailed options information."
-    echo " NETNS    The name of the namespace you wish to create"
-    echo " DEVICE   The network interface that you want to assign to the namespace NETNS"
-    echo
-    echo "OPTIONS:"
-    echo "--essid, -e <ESSID>       Connect wifi interface to ESSID"
-    echo "--passwd, -p <PASSWORD>   WPA2 only"
-    echo "--getpw, -g       Get wifi password from STDIN"
-    echo "--force, -f       Proceed even if resolv.conf is not found"
-    echo "--virtual -v      Use iw instead if ip to move the interface around"
-    echo "--noshell, -n     Don't spawn a shell in the new network namespace"
-    echo "--cleanup, -c     Skip setup and configuration, and go straight to cleanup"
-    echo "--strict, -s      Treat all errors as fatal, but try to cleanup before exiting"
-    echo "--strictkill -k   Treat all errors as fatal and exit immediately (no cleanup)"
-    echo "--static <STATIC_IP> <GATEWAY>    Static IP in lieu of dhclient"
-    echo "--noconfig, -o    Don't apply IP configuration with dhclient or --static option"
-    echo "--physical <WIFI> Print the physical name of the WIFI interface, then exit"
-    echo "--quiet, -q       Suppress unnecessary output (ignored if --debug flag used)"
-    echo "--verbose, -r     (overrides --quiet)"
-    echo "--debug, -d       (overrides --quiet and --verbose)"
-    echo
-    echo
-    echo "Note 1: this script must be run as the superuser."
-    echo
-    echo "Note 2: before using this script, you should have a custom resolv.conf file"
-    echo "that already exists in the folder /etc/netns/\$NETNS, the purpose is to have"
-    echo "this file bind to /etc/resolv.conf within the new namespace.  Without this you"
-    echo "will have to manually set up DNS (see --force option)."
-    echo
+ OPTIONS  See included USAGE file for detailed options information.
+ NETNS    The name of the namespace you wish to create
+ DEVICE   The network interface that you want to assign to the namespace NETNS
+
+OPTIONS:
+--essid, -e <ESSID>         Connect wifi interface to ESSID
+--passwd, -p <PASSWORD>     WPA2 only
+--getpw, -g       Get wifi password from STDIN
+--force, -f       Proceed even if resolv.conf is not found
+--virtual -v      Use iw instead if ip to move the interface around
+--noshell, -n     Don't spawn a shell in the new network namespace
+--execute, -x <CMD>         Run CMD instead of su in the new namespace
+--cleanup, -c     Skip setup and configuration, and go straight to cleanup
+--strict, -s      Treat all errors as fatal, but try to cleanup before exiting
+--strictkill -k   Treat all errors as fatal and exit immediately (no cleanup)
+--static <STATIC_IP> <GATEWAY>    Static IP in lieu of dhclient
+--noconfig, -o    Don't apply IP configuration with dhclient or --static option
+--physical <WIFI> Print the physical name of the WIFI interface, then exit
+--quiet, -q       Suppress unnecessary output (ignored if --debug flag used)
+--verbose, -r     (overrides --quiet)
+--debug, -d       (overrides --quiet and --verbose)
+
+
+Note 1: this script must be run as the superuser.
+
+Note 2: before using this script, you should have a custom resolv.conf file
+that already exists in the folder /etc/netns/\$NETNS, the purpose is to have
+this file bind to /etc/resolv.conf within the new namespace.  Without this you
+will have to manually set up DNS (see --force option).
+
+EOF
 }
 
 # Process options and positional arguments
@@ -230,7 +241,7 @@ get_arguments() {
                     d_echo $MSG_NORM "Argument missing after ESSID. Try $0 --help or $0 -h"
                     exit $BAD_ARGUMENT
                 fi
-                ESSID=$2
+                ESSID="$2"
                 INTERFACE_TYPE=$((INTERFACE_TYPE+1))
                 VIRTUAL=1
                 SET_WIFI=1 # used only for explicit parameter auditing
@@ -242,7 +253,7 @@ get_arguments() {
                     d_echo $MSG_NORM "Argument missing after password."
                     exit $BAD_ARGUMENT
                 fi
-                WIFI_PASSWORD=$2
+                WIFI_PASSWORD="$2"
                 if [ $SET_PWD -ne 1 -a $GET_PWD -ne 1 ]; then # make sure the variable is only increased once
                     INTERFACE_TYPE=$((INTERFACE_TYPE+2)) # if no ESSID specified, this value will stay at 2 and get flagged
                 fi
@@ -285,6 +296,16 @@ get_arguments() {
                 ;;
             --noshell|-n)
                 SPAWN_SHELL=0
+                shift
+                ;;
+            --execute|-x)
+                if [ $# -lt 2 ]; then
+                    d_echo $MSG_NORM "Argument missing for --execute <CMD>"
+                    exit $BAD_ARGUMENT
+                fi            
+                EXEC_FLAG=1
+                EXEC_CMD="$2"
+                shift
                 shift
                 ;;
             --cleanup|-c)
@@ -355,6 +376,7 @@ get_arguments() {
     fi
 
     if [ $SET_DEBUG -eq 1 ]; then # top priority
+        echo "DEBUG-- setting debug level"
         DEBUG_LEVEL=$MSG_DEBUG
     fi
 
@@ -364,6 +386,11 @@ get_arguments() {
 
     if [ $SPAWN_SHELL -eq 0 -a $CLEANUP_ONLY -eq 1 ]; then
         d_echo $MSG_NORM "--noshell and --cleanup options are incompatible.  Exiting."
+        exit $BAD_ARGUMENT
+    fi
+
+    if [ $EXEC_FLAG -eq 1 -a $CLEANUP_ONLY -eq 1 ]; then
+        d_echo $MSG_NORM "--execute and --cleanup options are incompatible.  Exiting."
         exit $BAD_ARGUMENT
     fi
 
@@ -401,6 +428,11 @@ get_arguments() {
         NETNS=$1
         DEVICE=$2
     else
+        #debug
+        #if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
+            var_dump
+        #fi
+
         d_echo $MSG_NORM "$0 --help for usage"
         d_echo $MSG_VERBOSE "Ambiguous, $# positional argument(s).  Exiting."
         exit $BAD_ARGUMENT
@@ -428,7 +460,7 @@ get_arguments() {
 ### SCRIPT ENTRY POINT ###
 #
 
-get_arguments $@
+get_arguments "$@"
 
 #debug
 if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
@@ -441,7 +473,8 @@ if [ "$(whoami)" != root ]; then
   exit $NO_ROOT
 fi
 
-d_echo $MSG_DEBUG "CLEANUP_ONLY = $CLEANUP_ONLY"
+# Redundant, commented out for now
+#d_echo $MSG_DEBUG "CLEANUP_ONLY = $CLEANUP_ONLY"
 
 if [ $CLEANUP_ONLY -eq 0 ]; then
 
@@ -614,11 +647,11 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         # connect to open network with iwconfig, or, with WPA supplicant if password is provided
         if [ $INTERFACE_TYPE -eq 1 ]; then
             d_echo $MSG_NORM "Attempting to connect to open wifi network $ESSID..."
-            ip netns exec "$NETNS" iwconfig "$DEVICE" essid "$ESSID"
+            ip netns exec "$NETNS" iwconfig "$DEVICE" essid \"$ESSID\"
             TEMP_EXIT=$?
         elif [ $INTERFACE_TYPE -eq 3 ]; then
             d_echo $MSG_NORM "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
-            wpa_passphrase $ESSID $WIFI_PASSWORD | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
+            wpa_passphrase \"$ESSID\" \"$WIFI_PASSWORD\" | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
             #alternate way:
             #ip netns exec "$NETNS" wpa_supplicant -B -i "$DEVICE" -c <(wpa_passphrase $ESSID $WIFI_PASSWORD)
             TEMP_EXIT=$?
@@ -702,11 +735,17 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 exit $NORMAL
             fi
  
-            # Spawn a shell in the new namespace
-            d_echo $MSG_NORM "Spawning root shell in $NETNS..."
-            d_echo $MSG_VERBOSE "... try runuser -u UserName BrowserName &"
-            d_echo $MSG_VERBOSE "... and exit to kill the shell and netns, when done"
-            ip netns exec "$NETNS" su
+
+            if [ $EXEC_FLAG -eq 1 ]; then # special command intended
+                d_echo $MSG_VERBOSE "Spawning command"
+                d_echo $MSG_DEBUG "$EXEC_CMD"
+                ip netns exec "$NETNS" $EXEC_CMD
+            else # Spawn a shell in the new namespace
+                d_echo $MSG_NORM "Spawning root shell in $NETNS..."
+                d_echo $MSG_VERBOSE "... try runuser -u UserName BrowserName &"
+                d_echo $MSG_VERBOSE "... and exit to kill the shell and netns, when done"
+                ip netns exec "$NETNS" su
+            fi
         fi
 
  

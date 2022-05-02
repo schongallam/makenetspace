@@ -1,15 +1,14 @@
 NEXT:
 Update usage() regarding --quiet, --debug, --verbose wording
-Update usage() to use cat << EOF
-Add a parameter to allow running a different command than sh
 Add a --bssid parameter to connect to a BSSID
-Test to version 1.0.0 release
-
 
 LATER:
 assess input verification needs
 
 DONE:
+Added a parameter to allow running a different command than sh - 2022-05-1
+Got ESSID and password to pass correctly even if they contain blank spaces with "$@" - 2022-05-01
+Update usage() to use cat <<EOF - 2022-04-07
 Remove the restart of network manager, and related command line options (2022-03-29, ver 0.3.1beta)
 fixed wpa_passphrase and wpa_supplicant lines
 move Debug echos to within the strict checking ifs
