@@ -619,7 +619,6 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         LO_FAIL=1
     fi # endif bring up lo
 
-    # skipping 'ip link set dev up' doesn't fix the wpa_supplicant problem
     if [ $STRICT -ne 2 ]; then
         d_echo $MSG_DEBUG "Bring up $DEVICE..."
         ip netns exec "$NETNS" ip link set dev "$DEVICE" up
@@ -639,19 +638,16 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     fi #endif bring up DEVICE
 
     # Connect to wifi, if required.
-
     if [ $STRICT -ne 2 ]; then
-
         TEMP_EXIT=0
-
         # connect to open network with iwconfig, or, with WPA supplicant if password is provided
         if [ $INTERFACE_TYPE -eq 1 ]; then
             d_echo $MSG_NORM "Attempting to connect to open wifi network $ESSID..."
-            ip netns exec "$NETNS" iwconfig "$DEVICE" essid \"$ESSID\"
+            ip netns exec "$NETNS" iwconfig "$DEVICE" essid "$ESSID"
             TEMP_EXIT=$?
         elif [ $INTERFACE_TYPE -eq 3 ]; then
             d_echo $MSG_NORM "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
-            wpa_passphrase \"$ESSID\" \"$WIFI_PASSWORD\" | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
+            wpa_passphrase "$ESSID" "$WIFI_PASSWORD" | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
             #alternate way in bash, ksh, zsh (but not dash, not POSIX compliant):
             #ip netns exec "$NETNS" wpa_supplicant -B -i "$DEVICE" -c <(wpa_passphrase "$ESSID" "$WIFI_PASSWORD")
             TEMP_EXIT=$?
@@ -689,7 +685,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         if [ $MANUAL_IP_CONFIG -eq 0 ]; then
             # dhclient can take a long time to try to connect, depending on your timeout setting in /etc/dhcp/dhclient.conf
             d_echo $MSG_NORM "Starting dhclient..."
-            ip netns exec "$NETNS" dhclient "$DEVICE"
+            ip netns exec "$NETNS" dhclient "$DEVICE" # if you are impatient and expect this to fail, you could add a &
             d_echo $MSG_DEBUG "dhclient returns status $?..." # Note, dhclient abnormality is not subject to --strict enforcement
         elif [ $MANUAL_IP_CONFIG -eq 1 ]; then
             d_echo $MSG_NORM "Attempting to manually configure STATIC_IP and GATEWAY..."
@@ -707,8 +703,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 else
                     d_echo $MSG_VERBOSE "...Could not add static IP and netmask..."
                 fi
-            fi
-
+            fi # reminder: don't close the if statement checking "$STRICT -ne 2" yet, bc the next if statement is dependent on a nested if test
 
             ip netns exec "$NETNS" ip route add default via "$GATEWAY"
             EXIT_CODE=$?            
@@ -728,13 +723,13 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         else
             d_echo $MSG_NORM "No IP host configuration set up.  Do not expect usual network access until you address this."
         fi #endif configure IP
+        # could close the if statement checking the last "$STRICT -ne 2", but only one more check remains so its functionally the same to just nest the next one.
 
         if [ $STRICT -ne 2 ]; then # if STRICT is enforced, script should cleanup instead of shelling or terminating here
             if [ $SPAWN_SHELL -eq 0 ]; then # we are done
                 exit $NORMAL
             fi
  
-
             if [ $EXEC_FLAG -eq 1 ]; then # special command intended
                 d_echo $MSG_VERBOSE "Spawning command"
                 d_echo $MSG_DEBUG "$EXEC_CMD"
@@ -746,8 +741,6 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
                 ip netns exec "$NETNS" su
             fi
         fi
-
- 
     fi # endif of namespace setup and shell. Only cleanup remains.
 
 else # --cleanup option enabled.  Still may need to set $PHY
