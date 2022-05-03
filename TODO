@@ -1,4 +1,5 @@
 NEXT:
+Somewhere between Versions 0.3.0beta and 0.3.2 Sbeta, wpa_supplicant stopped working. figure out why!
 Update usage() regarding --quiet, --debug, --verbose wording
 Add a --bssid parameter to connect to a BSSID
 Fix the cleanup steps to check for appropriate config options

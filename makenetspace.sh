@@ -619,6 +619,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         LO_FAIL=1
     fi # endif bring up lo
 
+    # skipping 'ip link set dev up' doesn't fix the wpa_supplicant problem
     if [ $STRICT -ne 2 ]; then
         d_echo $MSG_DEBUG "Bring up $DEVICE..."
         ip netns exec "$NETNS" ip link set dev "$DEVICE" up
@@ -637,7 +638,6 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         DEVICE_FAIL=1
     fi #endif bring up DEVICE
 
-
     # Connect to wifi, if required.
 
     if [ $STRICT -ne 2 ]; then
@@ -652,8 +652,8 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         elif [ $INTERFACE_TYPE -eq 3 ]; then
             d_echo $MSG_NORM "Attempting to connect to secure wifi network $ESSID... (may see initialization failures, that's usually OK)"
             wpa_passphrase \"$ESSID\" \"$WIFI_PASSWORD\" | ip netns exec "$NETNS" wpa_supplicant -i "$DEVICE" -c /dev/stdin -B
-            #alternate way:
-            #ip netns exec "$NETNS" wpa_supplicant -B -i "$DEVICE" -c <(wpa_passphrase $ESSID $WIFI_PASSWORD)
+            #alternate way in bash, ksh, zsh (but not dash, not POSIX compliant):
+            #ip netns exec "$NETNS" wpa_supplicant -B -i "$DEVICE" -c <(wpa_passphrase "$ESSID" "$WIFI_PASSWORD")
             TEMP_EXIT=$?
             d_echo $MSG_DEBUG "wpa_supplicant exits with code $TEMP_EXIT"
         fi
