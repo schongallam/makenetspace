@@ -683,7 +683,6 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
     if [ $STRICT -ne 2 ]; then
         d_echo $MSG_DEBUG "IP configuring step (unless --noconfig)"
-        # intentional blank line
         d_echo $MSG_NORM ""
 
         # start dhclient, or, assign given STATIC_IP and GATEWAY, or, do nothing
@@ -765,19 +764,12 @@ else # --cleanup option enabled.  Still may need to set $PHY
     fi
 fi # endif determining cleanup only or not
 
-
+#
 ### Cleanup phase ###
+#
 
-# Stop dhclient
-# likely no effect if we employed --static, but the user may have started it separately so kill it just in case
-d_echo $MSG_VERBOSE "Stopping dhclient..."
-ip netns exec "$NETNS" dhclient -r
-d_echo $MSG_NORM "Stopped dhclient in $NETNS with status $?"
-
-# Not always necessary, but might be beneficial under some circumstances?
-d_echo $MSG_VERBOSE "Killing wpa_supplicant..."
-ip netns exec "$NETNS" killall wpa_supplicant
-d_echo $MSG_NORM "Killed wpa_supplicant in $NETNS with status $?"
+d_echo $MSG_VERBOSE "Killing all remaining processes in $NETNS..."
+ip netns pids "$NETNS" | xargs kill
 
 # Move the device back into the default namespace
 d_echo $MSG_VERBOSE "Moving $DEVICE out of netns $NETNS..."
