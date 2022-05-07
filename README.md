@@ -14,26 +14,35 @@ See USAGE for more details.
 
 # makenetspace.sh [OPTIONS] NETNS DEVICE
 
- OPTIONS        See included USAGE file for detailed options information.
- NETNS          The name of the namespace you wish to create
- DEVICE         The network interface that you want to assign to the namespace NETNS
+ OPTIONS  See included USAGE file for detailed options information.
+ NETNS    The name of the namespace you wish to create
+ DEVICE   The network interface that you want to assign to the namespace NETNS
 
 OPTIONS:
---essid, -e <ESSID>                 Connect to ESSID
---passwd, -p <PASSWORD>             Password for ESSID (WPA2 only)
---getpw, -g                         Get wifi password from STDIN
---force, -f                         Proceed even it /etc/netns/$NETNS/resolv.conf is not found
---virtual -v                        Use iw instead if ip to move the interface around
---noshell, -n                       Don't spawn a shell in the new network namespace
---cleanup, -c                       Skip setup and configuration, and go straight to cleanup
---strict, -s                        Treat all errors as fatal, but try to cleanup before exiting
---strictkill -k                     Treat all errors as fatal and exit immediately (no cleanup)
---static <STATIC_IP> <GATEWAY>
---noconfig, -o                      Don't apply IP configuration with dhclient or --static option
---physical <WIFI>                   Try to print the physical name of the WIFI interface, then exit
---quiet, -q                         Suppress unnecessary output (ignored if --debug flag used)
---verbose, -r                       (overrides --quiet)
---debug, -d                         (overrides --quiet and --verbose)
+--essid, -e <ESSID>         Connect wifi interface to ESSID
+--passwd, -p <PASSWORD>     WPA2 only
+--getpw, -g       Get wifi password from STDIN
+--force, -f       Proceed even if resolv.conf is not found
+--virtual -v      Use iw instead if ip to move the interface around
+--noshell, -n     Don't spawn a shell in the new network namespace
+--execute, -x <CMD>         Run CMD instead of su in the new namespace
+--cleanup, -c     Skip setup and configuration, and go straight to cleanup
+--strict, -s      Treat all errors as fatal, but try to cleanup before exiting
+--strictkill -k   Treat all errors as fatal and exit immediately (no cleanup)
+--static <STATIC_IP> <GATEWAY>    Static IP in lieu of dhclient
+--noconfig, -o    Don't apply IP configuration with dhclient or --static option
+--physical <WIFI> Print the physical name of the WIFI interface, then exit
+--quiet, -q       Suppress unnecessary output (ignored if --debug flag used)
+--verbose, -r     (overrides --quiet)
+--debug, -d       (overrides --quiet and --verbose)
+
+
+Note 1: this script must be run as the superuser.
+
+Note 2: before using this script, you should have a custom resolv.conf file
+that already exists in the folder /etc/netns/\$NETNS, the purpose is to have
+this file bind to /etc/resolv.conf within the new namespace.  Without this you
+will have to manually set up DNS (see --force option).                       (overrides --quiet and --verbose)
 ```
 
 Note 1: this script must be run as the superuser.
@@ -42,7 +51,7 @@ Note 2: before using this script, you should have a custom resolv.conf file that
 
 ## tips
 RESCUE:
-if script fails and deletes the namespace without first removing the interface from the netns, it might appear "gone."  You can try:
+if script fails and deletes the namespace without first removing the interface from the netns, the interface might appear "gone."  You can try:
 ```
 $ sudo find /proc/ -name wlp7s0 # or interface name as appropriate
 $ sudo kill [process_id]
@@ -54,9 +63,9 @@ Make a namespace called testspace, move the wifi interface into it, connect to E
 
 `# makenetspace.sh --essid myWifi --passwd abcd1234 testspace wifi0`
 
-Same, but get the password from stdin:
+Connect to an ESSID containing a blankspace, and get the password from stdin:
 
-`# makenetspace.sh --essid myWifi --getpw testspace wifi0`
+`# makenetspace.sh --essid "Cafe Wifi" --getpw testspace wifi0`
 
 Try to find the name of the physical interface represented by a wifi device, then exit (does not require root):
 
@@ -95,23 +104,19 @@ For the last example, yes, it is counterintuitive to use --virtual and phy0 toge
 - Bring up both the loopback interface and the device
 - Connect to wifi network using provided ESSID and password, if applicable
 - Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
-- Spawn shell by default, otherwise exit here
-- Stop dhclient, if running
+- Spawn shell by default, execute the indicated command, or otherwise exit, per options
+- Stop processes inside the namespace
 - Move the device out of the namespace
 - Delete the namespace
 
 ## releases
 
-0.3.1 beta
-
-0.3.0 beta
-
-0.3.0 alpha
+currently still in initial beta testing
 
 ## dependencies
 ### utility (package):
 ```
-sh (dash_)
+sh (dash)
 su (util-linux)
 ip (iproute2)
 iw (iw)
