@@ -1,7 +1,5 @@
 NEXT:
-Update usage() regarding --quiet, --debug, --verbose wording
 Add a --bssid parameter to connect to a BSSID
-Fix the cleanup steps to check for appropriate config options
 
 LATER:
 assess input verification needs

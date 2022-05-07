@@ -213,7 +213,7 @@ OPTIONS:
 --cleanup, -c     Skip setup and configuration, and go straight to cleanup
 --strict, -s      Treat all errors as fatal, but try to cleanup before exiting
 --strictkill -k   Treat all errors as fatal and exit immediately (no cleanup)
---static <STATIC_IP> <GATEWAY>    Static IP in lieu of dhclient
+--static <STATIC_IP/MASK> <GATEWAY>    Static IP in lieu of dhclient
 --noconfig, -o    Don't apply IP configuration with dhclient or --static option
 --physical <WIFI> Print the physical name of the WIFI interface, then exit
 --quiet, -q       Suppress unnecessary output (ignored if --debug flag used)
