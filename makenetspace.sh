@@ -1,6 +1,7 @@
 #!/bin/sh
 #
-# makenetspace v 0.3.2-beta
+# makenetspace
+VERSION="0.3.3b"
 # Copyright 2021, 2022 Malcolm Schongalla, released under the MIT License (see end of file)
 #
 # malcolm.schongalla@gmail.com
@@ -195,6 +196,7 @@ usage() {
     cat <<EOF
 usage:
 # makenetspace.sh [OPTIONS] NETNS DEVICE
+Version $VERSION
 
  OPTIONS  See included USAGE file for detailed options information.
  NETNS    The name of the namespace you wish to create
@@ -428,10 +430,9 @@ get_arguments() {
         NETNS=$1
         DEVICE=$2
     else
-        #debug
-        #if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
+        if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
             var_dump
-        #fi
+        fi
 
         d_echo $MSG_NORM "$0 --help for usage"
         d_echo $MSG_VERBOSE "Ambiguous, $# positional argument(s).  Exiting."
