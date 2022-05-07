@@ -727,6 +727,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
 
         if [ $STRICT -ne 2 ]; then # if STRICT is enforced, script should cleanup instead of shelling or terminating here
             if [ $SPAWN_SHELL -eq 0 ]; then # we are done
+                d_echo $MSG_VERBOSE "Exiting without shell. $DEVICE successfully moved to $NETNS."
                 exit $NORMAL
             fi
  
@@ -744,7 +745,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     fi # endif of namespace setup and shell. Only cleanup remains.
 
 else # --cleanup option enabled.  Still may need to set $PHY
-    d_echo $MSG_NORM "Cleanup only"
+    d_echo $MSG_VERBOSE "Cleanup only"
     if [ $VIRTUAL -eq 1 ]; then
         d_echo $MSG_VERBOSE "Detecting physical name of virtual device for cleanup only"
         PHY="$(basename "$(cd "/sys/class/net/$DEVICE/phy80211" && pwd -P)")"
