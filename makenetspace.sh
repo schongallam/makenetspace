@@ -764,7 +764,12 @@ fi # endif determining cleanup only or not
 #
 
 d_echo $MSG_VERBOSE "Killing all remaining processes in $NETNS..."
-ip netns pids "$NETNS" | xargs kill
+
+if [ $DEBUG_LEVEL -gt $MSG_NORM ]; then
+    ip netns pids "$NETNS" | xargs kill
+else
+    ip netns pids "$NETNS" | xargs kill 2> /dev/null
+fi
 
 # Move the device back into the default namespace
 d_echo $MSG_VERBOSE "Moving $DEVICE out of netns $NETNS..."
