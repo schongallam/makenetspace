@@ -28,26 +28,24 @@ VERSION="0.3.3b"
 # - Connect to wifi network using provided ESSID and password, if applicable
 # - Start dhclient, by default.  Or, can statically configure IPv4 or leave unconfigured.
 # - Spawn shell by default, execute another specified command, or exit here
-# - Stop dhclient, if running
+# - kill any remaining PIDs in the network namespace
 # - move the device out of the namespace
 # - delete the namespace
 
 ### INTERNAL VARIABLES ###
 
 # Debug levels for stdout messages, used like constants
-#  MSG_FATAL            Something programatically went wrong. Will always print.
-MSG_FATAL=0
+#  MSG_FATAL            Something programmatically went wrong.  Will always print.  Used for beta development.
+MSG_FATAL=0             # factor this out for production versions if possible
 
-#  MSG_NORM             'Normal' information that would be good to display in most cases. Production default.
-#                       Examples: user errors that force script to exit, and important notifications.
+#  MSG_NORM             For error messages, user interaction, info about major script steps.  Production default.
 MSG_NORM=1
 
-#  MSG_VERBOSE          Something deviated from the expected, but script will attempt to proceed. Testing default.
-#                       Examples: 
+#  MSG_VERBOSE          More detailed info about steps.  Often accompanies a MSG_NORM echo.  Testing default.
 MSG_VERBOSE=2
 
-#  MSG_DEBUG            'Debug'-level info, for instance printing a variable, or tracing the
-#                       programmatic flow of the script.
+#  MSG_DEBUG            Debug-level info, for instance printing a variable, or tracing the
+#                       programmatic flow of the script.  i.e. variable contents, exit codes
 MSG_DEBUG=5
 
 #
@@ -470,7 +468,7 @@ fi
 
 # confirm root now, because the subsequent commands will need it
 if [ "$(whoami)" != root ]; then
-  d_echo $MSG_NORM "Fatal error: only root can run this script. Exiting ($NO_ROOT)" # MSG_FATAL? not necessarily because exit code
+  d_echo $MSG_NORM "Only root can run this script. Exiting ($NO_ROOT)"
   exit $NO_ROOT
 fi
 
@@ -487,7 +485,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
         if [ -f "/etc/netns/$NETNS/resolv.conf" ]; then
             d_echo $MSG_VERBOSE "... /etc/netns/$NETNS/resolv.conf exists."
         else
-            d_echo $MSG_NORM "Fatal error: /etc/netns/$NETNS/resolv.conf missing.  Please create this or"
+            d_echo $MSG_NORM "Error: /etc/netns/$NETNS/resolv.conf missing.  Please create this or"
             d_echo $MSG_NORM "run script with the -f option, and expect to set up DNS manually."
             d_echo $MSG_NORM "Exiting ($NO_RESOLV_CONF)"
             exit $NO_RESOLV_CONF
@@ -498,7 +496,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     # check for pre-existing network namespace
     ip netns | grep -w -o $NETNS > /dev/null
     if [ $? -ne 1 ]; then
-        d_echo $MSG_VERBOSE "Fatal error: that namespace won't work.  Please try a different one."
+        d_echo $MSG_VERBOSE "That namespace won't work.  Please try a different one."
         d_echo $MSG_VERBOSE "Check '$ ip netns' to make sure it's not already in use."
         d_echo $MSG_NORM "Exiting ($BAD_NAMESPACE)"
         exit $BAD_NAMESPACE
@@ -508,7 +506,7 @@ if [ $CLEANUP_ONLY -eq 0 ]; then
     # create the namespace
     ip netns add "$NETNS"
     if [ $? -ne 0 ]; then
-        d_echo $MSG_NORM "Fatal error: unable to create namespace $NETNS, exiting ($BAD_NAMESPACE)"
+        d_echo $MSG_NORM "Unable to create namespace $NETNS, exiting ($BAD_NAMESPACE)"
         exit $BAD_NAMESPACE
     fi
 
