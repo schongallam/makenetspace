@@ -1,5 +1,6 @@
-"""
-Usage:
+#Usage
+```
+usage:
 # makenetspace [OPTIONS] NETNS DEVICE
 
 This documentation is aspirational in early alpha versions
