@@ -1,4 +1,4 @@
-#Usage
+# Usage
 ```
 usage:
 # makenetspace [OPTIONS] NETNS DEVICE
