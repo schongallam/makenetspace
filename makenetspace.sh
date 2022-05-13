@@ -376,7 +376,7 @@ get_arguments() {
     fi
 
     if [ $SET_DEBUG -eq 1 ]; then # top priority
-        echo "DEBUG-- setting debug level"
+        echo "Debug level set"
         DEBUG_LEVEL=$MSG_DEBUG
     fi
 
@@ -424,7 +424,7 @@ get_arguments() {
     d_echo $MSG_DEBUG "Remaining parameters: $#"
 
     if [ $# -eq 2 ]; then
-        d_echo $MSG_DEBUG "two mandatory positional arguments..."
+        # d_echo $MSG_DEBUG "two mandatory positional arguments..."
         NETNS=$1
         DEVICE=$2
     else
@@ -438,7 +438,7 @@ get_arguments() {
     fi
 
     # everything checks good so far, so collect the wifi password from STDIN if indicated
-    # read -s is not POSIX compliant, this employs an alternate technique
+    # 'read -s' is not POSIX compliant, this employs an alternate technique
     if [ $GET_PWD -eq 1 -a $SET_WIFI -eq 1 ]; then
         if [ $DEBUG_LEVEL -gt $MSG_NORM ]; then
             echo -n "Enter WIFI password: "

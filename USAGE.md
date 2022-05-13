@@ -3,9 +3,6 @@
 usage:
 # makenetspace [OPTIONS] NETNS DEVICE
 
-This documentation is aspirational in early alpha versions
-Consider it a "TODO" list.
-
 OPTIONS:
 --essid, -e <ESSID> Attempt to join wireless network ESSID after creating namespace.
                     Ignored if using --cleanup.  Use quotes if it contains blank spaces.
@@ -63,7 +60,6 @@ OPTIONS:
                     continue (overrides --quiet)
 --debug, -d         Enable debug output (overrides --quiet and --verbose)
 
-                    
 
 MANDATORY PARAMETERS
  NETNS                The name of the namespace you wish to create.
