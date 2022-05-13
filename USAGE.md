@@ -82,8 +82,8 @@ DNS  (see -f option).
 
 Examples:
 
-# makenetspace MyEthernet eth0
-# makenetspace MyWifi wlp7s0 MyNetwork MyPassword
+# makenetspace TestNameSpace eth0
+# makenetspace -e MyHomeWifi -p "I Love My Dog" MyNameSpace wifi0
 # makenetspace --static 192.168.0.10/24 192.168.0.1 MyStaticHost eth0
 # makenetspace --cleanup MyWifi wlp7s0
 """
