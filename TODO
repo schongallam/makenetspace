@@ -1,5 +1,4 @@
 NEXT:
-Change the whoami check from root to UID 0
 Refactor application variables to lowercase, to comply with POSIX standards
 Check bounds on INTERFACE_TYPE and for multiple instances of --essid, --passwd
 
@@ -9,6 +8,7 @@ LATER:
 assess input verification needs
 
 DONE:
+Change the whoami check from root to UID 0
 Keep testing ability to have a blank space inside SSID or password - tests OK 2022-05-04
 Added a parameter to allow running a different command than sh - 2022-05-1
 Got ESSID and password to pass correctly even if they contain blank spaces with "$@" - 2022-05-01 (Later shown failed)
