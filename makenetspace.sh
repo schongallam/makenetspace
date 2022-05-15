@@ -463,7 +463,7 @@ if [ $DEBUG_LEVEL -eq $MSG_DEBUG ]; then
 fi
 
 # confirm root now, because the subsequent commands will need it
-if [ "$(whoami)" != root ]; then
+if [ $(id -u) -ne 0 ]; then
   d_echo $MSG_NORM "Only root can run this script. Exiting ($NO_ROOT)"
   exit $NO_ROOT
 fi
