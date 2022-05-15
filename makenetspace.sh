@@ -160,7 +160,7 @@ d_echo() {
     if [ $1 -le $DEBUG_LEVEL ]; then echo "$2"; fi
 }
 
-#debug output
+# for debug output
 var_dump() {
     echo "FORCE = $FORCE"
     echo "INTERFACE_TYPE = $INTERFACE_TYPE"
@@ -189,7 +189,6 @@ var_dump() {
     echo "DEVICE = $DEVICE"
 }
 
-# HELP TEXT: (ignore debug level for stdout messages, always print)
 usage() {
     cat <<EOF
 usage:
@@ -229,7 +228,6 @@ will have to manually set up DNS (see --force option).
 EOF
 }
 
-# Process options and positional arguments
 get_arguments() {
 
     INTERFACE_TYPE=0
@@ -365,8 +363,6 @@ get_arguments() {
     #  abuse or undocumented behavior if someone uses the same argument multiple times.  To account for this,
     #  explicit checking was later implemented
 
-    # Currently using discrete options to set debug output level.
-    # Considered using an integer option in the future, but that would make the parameter less intuitive.
     if [ $SET_QUIET -eq 1 ]; then # lowest priority option
         DEBUG_LEVEL=$MSG_FATAL
     fi
