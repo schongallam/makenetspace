@@ -1,4 +1,8 @@
 NEXT:
+Change the whoami check from root to UID 0
+Refactor application variables to lowercase, to comply with POSIX standards
+Check bounds on INTERFACE_TYPE and for multiple instances of --essid, --passwd
+
 Add a --bssid parameter to connect to a BSSID
 
 LATER:
