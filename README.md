@@ -9,7 +9,7 @@ Another example situation would be configuring a network device over a physical 
 This script was created and tested on Linux Mint 20.1.
 
 ## usage:
-See USAGE for more details.
+See USAGE.md for more details.
 ```usage:
 
 # makenetspace.sh [OPTIONS] NETNS DEVICE
