@@ -1,6 +1,7 @@
 NEXT:
 Refactor application variables to lowercase, to comply with POSIX standards
 Check bounds on INTERFACE_TYPE and for multiple instances of --essid, --passwd
+Consider option to enable iwd commands instead of wpa_supplicants
 
 Add a --bssid parameter to connect to a BSSID
 
