@@ -195,9 +195,9 @@ usage:
 # makenetspace.sh [OPTIONS] netns net_device
 Version $version
 
- OPTIONS  See included USAGE file for detailed options information.
- netns    The name of the namespace you wish to create
- net_device   The network interface that you want to assign to the namespace netns
+ OPTIONS        See included USAGE file for detailed options information.
+ netns          The name of the namespace you wish to create
+ net_device     The network interface that you want to assign to the namespace netns
 
 OPTIONS:
 --essid, -e <ESSID>         Connect wifi interface to ESSID
